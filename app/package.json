@@ -2,8 +2,11 @@
   "name": "qoan-reports",
   "version": "1.0.0",
   "description": "App de Informes QOAN",
-  "main": "index.html",
+  "main": "admin.html",
   "scripts": {
+    "dev": "npx http-server ./ -p 3000 -o",
+    "android:open": "cap open android",
+    "android:sync": "cap sync android",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

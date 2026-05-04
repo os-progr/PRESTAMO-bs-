@@ -1,0 +1,8 @@
+{
+  "appId": "com.qoan.prestamo",
+  "appName": "QOAN App",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
