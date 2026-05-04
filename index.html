@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QOAN | Soluciones Financieras</title>
+    <meta name="description" content="Sistema de gestión de préstamos de alta gama con estadísticas en tiempo real, recibos digitales y seguimiento automático.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js for Reports -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar or Header -->
+        <header class="main-header">
+            <div class="logo-area">
+                <h1 class="logo-text">QOAN <span>SOLUCIONES FINANCIERAS</span></h1>
+            </div>
+            <div class="greeting-area" id="dynamic-greeting">
+                <span>Cargando...</span>
+            </div>
+            <div class="header-actions">
+                <button id="btn-settings" class="btn-secondary" title="Configuración">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button id="btn-import" class="btn-secondary" title="Importar Copia de Seguridad">
+                    <i class="fas fa-file-import"></i> Importar
+                </button>
+                <button id="btn-export-csv" class="btn-secondary">
+                    <i class="fas fa-file-export"></i> Exportar
+                </button>
+                <button id="btn-new-loan" class="btn-primary">
+                    <i class="fas fa-plus"></i> Nueva Operación
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Dashboard -->
+        <section class="stats-grid">
+            <div class="stat-card glass">
+                <div class="stat-icon gold"><i class="fas fa-money-bill-trend-up"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Total a Recuperar</span>
+                    <h2 id="stat-capital-calle" class="stat-value">S/ 0.00</h2>
+                    <small style="color: var(--text-muted)">(Saldo Neto: Cap + Int)</small>
+                </div>
+            </div>
+            <div class="stat-card glass">
+                <div class="stat-icon gold" style="background: rgba(255, 77, 77, 0.1); color: var(--error-red);"><i class="fas fa-calendar-times"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Mora por Cobrar</span>
+                    <h2 id="stat-mora-acumulada" class="stat-value" style="color: var(--error-red);">S/ 0.00</h2>
+                    <small style="color: var(--text-muted)">(No incluido en Saldo)</small>
+                </div>
+            </div>
+            <div class="stat-card glass">
+                <div class="stat-icon gold"><i class="fas fa-hand-holding-heart"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Capital Invertido</span>
+                    <h2 id="stat-capital-puro" class="stat-value">S/ 0.00</h2>
+                </div>
+            </div>
+            <div class="stat-card glass">
+                <div class="stat-icon gold"><i class="fas fa-sack-dollar"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Ganancia Ya Cobrada</span>
+                    <h2 id="stat-ganancia-cobrada" class="stat-value">S/ 0.00</h2>
+                    <small style="color: var(--success-green)">(Intereses en bolsillo)</small>
+                </div>
+            </div>
+            <div class="stat-card glass">
+                <div class="stat-icon gold"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Intereses por Cobrar</span>
+                    <h2 id="stat-ganancia-pendiente" class="stat-value">S/ 0.00</h2>
+                    <small style="color: var(--text-muted)">(En la calle)</small>
+                </div>
+            </div>
+            <div class="stat-card glass alert-card" id="alert-upcoming" style="display: none; cursor: pointer;" title="Clic para filtrar lista">
+                <div class="stat-icon gold"><i class="fas fa-bell"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Por Vencer (7d)</span>
+                    <h2 id="stat-upcoming-count" class="stat-value">0</h2>
+                    <div id="upcoming-names-list" style="font-size: 0.7rem; color: var(--gold-light); margin-top: 5px; max-height: 50px; overflow-y: auto;">
+                        <!-- Nombres y DNIs aparecerán aquí -->
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card glass">
+                <div class="stat-icon gold"><i class="fas fa-users"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Socios Activos</span>
+                    <h2 id="stat-socios-conteo" class="stat-value">0</h2>
+                </div>
+            </div>
+        </section>
+
+        </section>
+
+        <!-- Advanced Reports Dashboard (For Android App View) -->
+        <section class="reports-dashboard glass" id="admin-reports-panel" style="margin-bottom:30px; display:none;">
+            <div class="section-header">
+                <h3 style="font-family:var(--font-heading);color:var(--gold-light);"><i class="fas fa-chart-pie" style="color:var(--gold-primary);margin-right:10px;"></i>Panel de Informes Gerenciales</h3>
+                <button onclick="document.getElementById('admin-reports-panel').style.display='none'" class="btn-secondary" style="padding:5px 10px; font-size:0.7rem;">Cerrar</button>
+            </div>
+            <div class="charts-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px; margin-top:20px;">
+                <div class="chart-container glass" style="padding:20px; background:rgba(0,0,0,0.3);">
+                    <h4 style="color:var(--gold-primary); font-size:0.8rem; margin-bottom:15px; text-align:center;">DISTRIBUCIÓN DE CAPITAL Y GANANCIA</h4>
+                    <canvas id="chart-distribution"></canvas>
+                </div>
+                <div class="chart-container glass" style="padding:20px; background:rgba(0,0,0,0.3);">
+                    <h4 style="color:var(--gold-primary); font-size:0.8rem; margin-bottom:15px; text-align:center;">ESTADO DE CARTERA (MES ACTUAL)</h4>
+                    <canvas id="chart-status"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Botón para abrir Panel de Informes (Solo para Admin) -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button onclick="document.getElementById('admin-reports-panel').style.display='block'; initCharts();" class="btn-primary" style="background: linear-gradient(135deg, #d4af37 0%, #aa8418 100%); border: none;">
+                <i class="fas fa-chart-line"></i> Ver Informes Detallados
+            </button>
+        </div>
+
+        <!-- Main Content: Client List -->
+        <main class="content-area">
+            <div class="section-header">
+                <h2 class="section-title">Cartera de Clientes</h2>
+                <div class="filter-tabs">
+                    <button class="filter-btn active" data-filter="todos">Activos</button>
+                    <button class="filter-btn" data-filter="mora">🚩 En Mora</button>
+                    <button class="filter-btn" data-filter="proximos">🔔 Por Vencer</button>
+                    <button class="filter-btn" data-filter="pendiente">⏳ Al Día</button>
+                    <button class="filter-btn" data-filter="pagado">✅ Pagados</button>
+                </div>
+                <select id="sort-select" class="sort-select">
+                    <option value="default">📊 Mora primero</option>
+                    <option value="vencimiento">📅 Vencimiento</option>
+                    <option value="saldo">💰 Mayor saldo</option>
+                    <option value="nombre">🔤 Nombre A-Z</option>
+                </select>
+                <div class="search-box glass">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="client-search" placeholder="Buscar socio...">
+                </div>
+            </div>
+
+            <div class="clients-list" id="clients-container">
+                <!-- Client cards will be injected here -->
+                <div class="empty-state">
+                    <i class="fas fa-folder-open"></i>
+                    <p>No hay préstamos registrados aún.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for New Operation -->
+    <div id="modal-loan" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-signature gold"></i> Nueva Operación</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <form id="loan-form">
+                <input type="hidden" id="edit-client-id">
+                <div class="form-section">
+                    <h3>Datos Personales</h3>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label for="client-name">Nombre Completo</label>
+                            <input type="text" id="client-name" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="client-dni">DNI / ID</label>
+                            <input type="text" id="client-dni" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="client-phone">WhatsApp (Ej: 51987654321)</label>
+                            <input type="tel" id="client-phone" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="client-maps">Ubicación / Referencia</label>
+                            <input type="text" id="client-maps" placeholder="Enlace de Maps o Dirección escrita">
+                        </div>
+                        <div class="input-group">
+                            <label for="client-rating">Calificación de Confianza</label>
+                            <select id="client-rating">
+                                <option value="5">⭐⭐⭐⭐⭐ (Excelente)</option>
+                                <option value="4">⭐⭐⭐⭐ (Bueno)</option>
+                                <option value="3" selected>⭐⭐⭐ (Regular)</option>
+                                <option value="2">⭐⭐ (Riesgoso)</option>
+                                <option value="1">⭐ (Muy Riesgoso)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Parámetros Financieros</h3>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label for="loan-amount">Monto Principal</label>
+                            <input type="number" id="loan-amount" step="0.01" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loan-interest">Interés (%)</label>
+                            <input type="number" id="loan-interest" step="0.1" value="10" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loan-term">Plazo (Meses)</label>
+                            <input type="number" id="loan-term" value="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loan-type">Tipo de Cobro</label>
+                            <select id="loan-type" class="glass-select">
+                                <option value="fijo">Cuotas Fijas (Cap + Int)</option>
+                                <option value="interes">Solo Interés Mensual</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="loan-start-date">Fecha de Inicio</label>
+                            <input type="date" id="loan-start-date" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loan-collection-date">Próximo Cobro</label>
+                            <input type="date" id="loan-collection-date" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Total a Devolver</label>
+                            <div class="read-only-input" id="calc-total">$0.00</div>
+                        </div>
+                        <div class="input-group">
+                            <label>Valor de Cuota</label>
+                            <div class="read-only-input" id="calc-cuota">$0.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Evidencias Visuales</h3>
+                    <div class="file-upload-area" id="drop-zone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Arrastra fotos o haz clic para subir</p>
+                        <input type="file" id="client-evidences" multiple accept="image/*" hidden>
+                        <div id="preview-thumbnails" class="thumbnails-grid"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Notas Internas</h3>
+                    <div class="input-group">
+                        <label for="client-notes">Observaciones (solo visibles para ti)</label>
+                        <textarea id="client-notes" rows="2" placeholder="Ej: Paga puntual, tiene garantía, trabaja en..."></textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary full-width">Registrar Préstamo de Honor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Payments -->
+    <div id="modal-payment" class="modal">
+        <div class="modal-content glass small-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cash-register gold"></i> Registrar Cobro</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="payment-details">
+                <!-- Details will be dynamic -->
+            </div>
+            <form id="payment-form">
+                <input type="hidden" id="payment-client-id">
+                
+                <div class="input-group" id="payment-type-group" style="display:none; margin-bottom:15px;">
+                    <label for="payment-type-select">Tipo de Movimiento</label>
+                    <select id="payment-type-select" class="glass-select">
+                        <option value="interes" selected>💰 Cobro de Interés Mensual</option>
+                        <option value="capital">📉 Abono Directo al Capital</option>
+                    </select>
+                    <small style="color:var(--text-muted); font-size:0.7rem; margin-top:4px; display:block;" id="payment-type-hint">El interés mensual se cobrará sobre el nuevo capital restante.</small>
+                </div>
+
+                <div class="input-group">
+                    <label for="payment-amount">Monto Recibido</label>
+                    <input type="number" id="payment-amount" step="0.01" required>
+                </div>
+                <button type="submit" class="btn-primary full-width">Confirmar Cobro y Generar Recibo</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for History -->
+    <div id="modal-history" class="modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2><i class="fas fa-history gold"></i> Historial de Movimientos</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="history-content">
+                <!-- Payment history table will be here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Settings -->
+    <div id="modal-settings" class="modal">
+        <div class="modal-content glass small-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog gold"></i> Ajustes del Sistema</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <form id="settings-form">
+                <div class="form-section">
+                    <h3>Reglas de Negocio</h3>
+                    <div class="input-group">
+                        <label for="set-mora-rate">Monto de Mora Diario (Fijo)</label>
+                        <input type="number" id="set-mora-rate" step="0.10" required>
+                        <small style="color: var(--text-muted)">Ejemplo: 0.50 para cobrar S/ 0.50 por cada día de retraso.</small>
+                    </div>
+                    <div class="input-group">
+                        <label for="set-currency">Símbolo de Moneda</label>
+                        <input type="text" id="set-currency" value="S/" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="set-yape-name">Nombre Yape</label>
+                        <input type="text" id="set-yape-name" placeholder="Ej: Juan David Puclla">
+                    </div>
+                    <div class="input-group">
+                        <label for="set-yape-phone">Número Yape</label>
+                        <input type="text" id="set-yape-phone" placeholder="Ej: 900779111">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary full-width">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lightbox for Images -->
+    <div id="lightbox" class="lightbox">
+        <span class="close-lightbox">&times;</span>
+        <button class="lightbox-nav" id="lightbox-prev" style="display:none;"><i class="fas fa-chevron-left"></i></button>
+        <img id="lightbox-img" src="" alt="Evidencia">
+        <button class="lightbox-nav" id="lightbox-next" style="display:none;"><i class="fas fa-chevron-right"></i></button>
+        <div id="lightbox-counter" class="lightbox-counter"></div>
+    </div>
+
+    <!-- Canvas hidden for receipt generation -->
+    <canvas id="receipt-canvas" style="display:none;"></canvas>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="import-file" accept=".json" style="display:none;">
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="modal-confirm" class="modal">
+        <div class="modal-content glass small-modal" style="max-width:420px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color:#f1c40f;"></i> Confirmar</h2>
+            </div>
+            <p id="confirm-message" style="margin-bottom:25px;color:var(--text-main);line-height:1.7;"></p>
+            <div style="display:flex;gap:15px;">
+                <button id="confirm-cancel" class="btn-secondary full-width">Cancelar</button>
+                <button id="confirm-ok" class="btn-primary full-width">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
