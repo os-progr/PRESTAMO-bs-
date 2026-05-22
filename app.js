@@ -1,11 +1,15 @@
 // --- State Management ---
 let state = {
-    clients: JSON.parse(localStorage.getItem('prestamo_elite_clients')) || [],
-    config: JSON.parse(localStorage.getItem('prestamo_elite_config')) || {
+    clients: [],
+    config: {
         moraRate: 0.50, // S/ 0.50 daily flat rate
         currency: 'S/',
         yapeName: 'Juan David Puclla Quispe',
         yapePhone: '900 779 111'
+    },
+    settings: {
+        githubRepo: '',
+        githubToken: ''
     }
 };
 
@@ -56,24 +60,30 @@ const elements = {
 };
 
 // --- Initialization ---
-function init() {
+async function init() {
+    try {
+        const clientsRes = await fetch('http://localhost:3000/api/clients');
+        state.clients = await clientsRes.json();
+        const configRes = await fetch('http://localhost:3000/api/config');
+        state.config = await configRes.json();
+    } catch (e) {
+        console.error('Error cargando datos del backend:', e);
+    }
+
     updateGreeting();
     renderClients();
     updateStats();
     updateMonthlySummary();
     setupEventListeners();
     
-    // Force update Yape details if they are not set to the new requested values
-    if (state.config.yapePhone !== '900 779 111' || state.config.yapeName !== 'Juan David Puclla Quispe') {
-        state.config.yapePhone = '900 779 111';
-        state.config.yapeName = 'Juan David Puclla Quispe';
-        saveToStorage();
-    }
-
     elements.setMoraRate.value = state.config.moraRate;
     elements.setCurrency.value = state.config.currency;
     document.getElementById('set-yape-name').value = state.config.yapeName;
     document.getElementById('set-yape-phone').value = state.config.yapePhone;
+    
+    // GitHub settings
+    document.getElementById('set-github-repo').value = state.settings.githubRepo || '';
+    document.getElementById('set-github-token').value = state.settings.githubToken || '';
 
     setInterval(updateGreeting, 60000); // Update greeting every minute
 }
@@ -130,10 +140,143 @@ function _updateLb() {
 // --- Logic Functions ---
 
 function saveToStorage() {
-    localStorage.setItem('prestamo_elite_clients', JSON.stringify(state.clients));
-    localStorage.setItem('prestamo_elite_config', JSON.stringify(state.config));
+    fetch('http://localhost:3000/api/clients/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clients: state.clients })
+    }).catch(e => console.error('Error guardando clientes:', e));
+    
+    fetch('http://localhost:3000/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.config)
+    }).catch(e => console.error('Error guardando config:', e));
+    
     updateStats();
     updateMonthlySummary();
+}
+
+function updateSmartProjection() {
+    const id = elements.paymentClientId ? elements.paymentClientId.value : null;
+    if (!id) return;
+    const client = state.clients.find(c => c.id === id);
+    const container = document.getElementById('smart-projection');
+    
+    if (!client || client.loanType !== 'interes' || !container) {
+        if(container) container.style.display = 'none';
+        return;
+    }
+
+    const typeSelect = document.getElementById('payment-type-select');
+    const type = typeSelect ? typeSelect.value : 'abono';
+    const amount = parseFloat(elements.paymentAmount.value) || 0;
+
+    if (type === 'capital' && amount > 0) {
+        const currentInterest = Math.round((client.amount * (client.interest / 100)) * 100) / 100;
+        const newCapital = Math.max(0, client.amount - amount);
+        const newInterest = Math.round((newCapital * (client.interest / 100)) * 100) / 100;
+        const savings = Math.max(0, currentInterest - newInterest);
+        
+        container.innerHTML = `
+            <div style="background:rgba(0, 255, 136, 0.08); border:1px solid rgba(0, 255, 136, 0.2); padding:15px; border-radius:12px; margin:10px 0 20px 0; animation: revealCard 0.4s ease-out;">
+                <p style="font-size:0.65rem; color:var(--success-green); font-weight:900; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">
+                    <i class="fas fa-magic"></i> Proyección de Ahorro
+                </p>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="font-size:0.6rem; color:var(--text-muted); display:block; text-transform:uppercase;">Nuevo Interés</span>
+                        <span style="font-size:1.2rem; color:#fff; font-weight:800;">${state.config.currency} ${newInterest.toFixed(2)}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:0.6rem; color:var(--text-muted); display:block; text-transform:uppercase;">Ahorro Mensual</span>
+                        <span style="font-size:1.2rem; color:var(--success-green); font-weight:800;">-${state.config.currency} ${savings.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p style="font-size:0.65rem; color:var(--text-muted); margin-top:8px; font-style:italic;">* El cliente pagará menos interés todos los meses siguientes.</p>
+            </div>
+        `;
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+// --- GitHub Sync Logic ---
+async function syncFromGitHub() {
+    const repo = state.settings.githubRepo;
+    if (!repo) return;
+
+    try {
+        const url = `https://raw.githubusercontent.com/${repo}/main/data.json?t=${Date.now()}`;
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.clients) {
+                state.clients = data.clients;
+                if (data.config) state.config = data.config;
+                saveToStorage();
+                renderClients();
+                showToast('Datos sincronizados desde GitHub ✓', 'success');
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn('Error sincronizando desde GitHub:', e);
+    }
+    return false;
+}
+
+async function syncToGitHub() {
+    const repo = state.settings.githubRepo;
+    const token = state.settings.githubToken;
+    if (!repo || !token) {
+        showToast('Configura el Repositorio y el Token en Ajustes.', 'warning');
+        openSettings();
+        return;
+    }
+
+    const data = {
+        clients: state.clients,
+        config: state.config,
+        updatedAt: new Date().toISOString()
+    };
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const url = `https://api.github.com/repos/${repo}/contents/data.json`;
+
+    try {
+        let sha = "";
+        const getRes = await fetch(url, {
+            headers: { 'Authorization': `token ${token}` }
+        });
+        if (getRes.ok) {
+            const fileData = await getRes.json();
+            sha = fileData.sha;
+        }
+
+        const putRes = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: 'Sync desde Web QOAN',
+                content: content,
+                sha: sha
+            })
+        });
+
+        if (putRes.ok) {
+            showToast('¡Datos subidos a GitHub correctamente! ✓', 'success');
+        } else {
+            const error = await putRes.json();
+            showToast('Error al subir: ' + error.message, 'error');
+        }
+    } catch (e) {
+        showToast('Error de conexión con GitHub.', 'error');
+        console.error(e);
+    }
 }
 
 function calculateMora(client) {
@@ -262,10 +405,7 @@ function updateStats() {
     
     elements.statSocios.textContent = activeSocios;
 
-    // Refresh charts if open
-    if (document.getElementById('admin-reports-panel').style.display === 'block') {
-        initCharts();
-    }
+
     
     // Alert for upcoming
     const alertUpcoming = document.getElementById('alert-upcoming');
@@ -281,57 +421,7 @@ function updateStats() {
     }
 }
 
-let _charts = {};
-function initCharts() {
-    const s = window.currentStats;
-    if (!s) return;
 
-    const ctxDist = document.getElementById('chart-distribution').getContext('2d');
-    const ctxStatus = document.getElementById('chart-status').getContext('2d');
-
-    // Chart 1: Money Distribution
-    if (_charts.dist) _charts.dist.destroy();
-    _charts.dist = new Chart(ctxDist, {
-        type: 'doughnut',
-        data: {
-            labels: ['Capital en Calle', 'Ganancia Cobrada', 'Ganancia Pendiente'],
-            datasets: [{
-                data: [s.capitalEnCalle, s.gananciaCobrada, s.gananciaPendiente],
-                backgroundColor: ['#d4af37', '#27ae60', '#f1c40f'],
-                borderWidth: 0,
-                hoverOffset: 10
-            }]
-        },
-        options: {
-            plugins: {
-                legend: { position: 'bottom', labels: { color: '#fff', font: { size: 10 } } }
-            },
-            cutout: '70%'
-        }
-    });
-
-    // Chart 2: Portfolio Status
-    if (_charts.status) _charts.status.destroy();
-    _charts.status = new Chart(ctxStatus, {
-        type: 'bar',
-        data: {
-            labels: ['Activos', 'En Mora', 'Finalizados'],
-            datasets: [{
-                label: 'Clientes',
-                data: [s.active, s.inMora, s.paid],
-                backgroundColor: ['#d4af37', '#e74c3c', '#2ecc71'],
-                borderRadius: 5
-            }]
-        },
-        options: {
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' } },
-                x: { grid: { display: false }, ticks: { color: '#fff' } }
-            },
-            plugins: { legend: { display: false } }
-        }
-    });
-}
 
 function calculateLoanPreview() {
     const amount = parseFloat(elements.loanAmount.value) || 0;
@@ -489,7 +579,13 @@ function renderClients(filterText = "", statusFilter = "todos") {
                 isReminderDay = diffDays === 4;
             }
 
-            card.className = `client-card glass ${hasMora ? 'mora-active' : ''} ${isUpcoming ? 'upcoming-active' : ''} ${isReminderDay ? 'reminder-active' : ''}`;
+            const isInterestOnly = client.loanType === 'interes';
+            const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
+            const interestPaid = client.interestPaidCount || 0;
+            const totalMonths = client.term || 1;
+            const isLastInterestMonth = isInterestOnly && (interestPaid >= totalMonths - 1);
+
+            card.className = `client-card glass ${hasMora ? 'mora-active' : ''} ${isUpcoming ? 'upcoming-active' : ''} ${isReminderDay ? 'reminder-active' : ''} ${isInterestOnly ? 'interest-only-mode' : ''}`;
             card.dataset.clientId = client.id;
 
             const stars = '⭐'.repeat(client.rating || 3);
@@ -499,11 +595,27 @@ function renderClients(filterText = "", statusFilter = "todos") {
             const lastPayments = (client.payments || []).slice(-2).reverse();
             let miniHistoryHtml = '';
             if (lastPayments.length > 0) {
-                miniHistoryHtml = `<div class="mini-history"><div class="mini-history-title"><span>Últimos Abonos</span><i class="fas fa-history"></i></div>${lastPayments.map(p => `<div class="mini-history-item"><span class="mini-history-date">${new Date(p.date).toLocaleDateString()}</span><span class="mini-history-amount">${state.config.currency} ${p.amount.toFixed(2)}</span></div>`).join('')}</div>`;
+                miniHistoryHtml = `
+                    <div class="mini-history">
+                        <div class="mini-history-title"><span>Historial Reciente</span><i class="fas fa-bolt" style="color:var(--gold-primary);"></i></div>
+                        ${lastPayments.map(p => {
+                            const icon = p.paymentType === 'interes' ? 'fa-coins' : (p.paymentType === 'amortizacion' ? 'fa-arrow-down' : 'fa-check-double');
+                            const color = p.paymentType === 'interes' ? 'var(--gold-primary)' : (p.paymentType === 'amortizacion' ? '#9b59b6' : 'var(--success-green)');
+                            return `
+                                <div class="mini-history-item">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <i class="fas ${icon}" style="font-size:0.6rem; color:${color};"></i>
+                                        <span class="mini-history-date">${new Date(p.date).toLocaleDateString()}</span>
+                                    </div>
+                                    <span class="mini-history-amount">${state.config.currency} ${p.amount.toFixed(2)}</span>
+                                </div>`;
+                        }).join('')}
+                    </div>`;
             }
 
             card.innerHTML = `
                 ${isReminderDay ? '<div class="reminder-tag"><i class="fas fa-bell"></i> Enviar Recordatorio Hoy</div>' : ''}
+                ${(isInterestOnly && !hasMora && client.status !== 'Pagado') ? `<div class="modality-tag"><i class="fas fa-sync-alt"></i> Solo Interés (${interestPaid}/${totalMonths})</div>` : ''}
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;">
                     <div>
                         <h3 class="card-name" style="font-family:var(--font-heading);font-size:1rem;color:var(--gold-primary);margin-bottom:2px;">${client.name}</h3>
@@ -519,6 +631,20 @@ function renderClients(filterText = "", statusFilter = "todos") {
                             <span class="value" style="font-size:1.5rem;color:#fff;font-weight:800;">${state.config.currency} ${(client.remainingBalance + mora).toFixed(2)}</span>
                             <span style="font-size:0.7rem;color:var(--text-muted);">con mora</span>
                         </div>
+                        ${isInterestOnly && client.status !== 'Pagado' ? `
+                            <div style="margin-top:15px; padding:15px; background:rgba(212,175,55,0.06); border-radius:12px; border:1px solid rgba(212,175,55,0.15); box-shadow:inset 0 0 15px rgba(212,175,55,0.05); position:relative;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <span style="font-size:0.6rem; color:var(--gold-primary); font-weight:900; text-transform:uppercase; letter-spacing:1.5px; background:rgba(212,175,55,0.1); padding:3px 8px; border-radius:4px;">
+                                        <i class="fas fa-hand-holding-usd"></i> PRÓXIMO COBRO
+                                    </span>
+                                    <span style="font-size:0.65rem; color:var(--text-muted); font-style:italic;">${isLastInterestMonth ? 'Pago Final' : 'Interés Mensual'}</span>
+                                </div>
+                                <div style="display:flex; align-items:baseline; gap:5px;">
+                                    <span style="font-size:1.4rem; color:#fff; font-weight:800; font-family:var(--font-heading);">${state.config.currency} ${(isLastInterestMonth ? (client.amount + monthlyInterest + mora) : (monthlyInterest + mora)).toFixed(2)}</span>
+                                    <span style="font-size:0.75rem; color:var(--gold-light); opacity:0.8;">${mora > 0 ? '+ mora' : ''}</span>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="progress-container"><div class="progress-bar" style="width:${progressPercent}%"></div></div>
                     <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted);margin-top:-10px;margin-bottom:15px;">
@@ -628,6 +754,7 @@ function openPaymentModal(id) {
 
     elements.paymentDetails.innerHTML = detailsHtml + quickBtns;
     elements.modalPayment.style.display = "flex";
+    updateSmartProjection(); // Initialize projection on open
 }
 
 function generateReceipt(client, amountPaid, newBalance, nextDueDate, paymentType = 'abono', monthlyInterest = 0) {
@@ -770,72 +897,83 @@ function sendWhatsApp(id) {
     if (!client) return;
 
     const mora = calculateMora(client);
-    const totalPaid = (client.payments || []).reduce((sum, p) => sum + p.amount, 0);
-    const totalDueWithMora = client.remainingBalance + mora;
     const isInterestOnly = client.loanType === 'interes';
     const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
     
-    // Calculate what's due this month
     let cuotaSugerida = client.totalToReturn / (client.term || 1);
-    let descCuota = "Cuota del mes";
 
     if (isInterestOnly) {
         const interestPaid = client.interestPaidCount || 0;
         const totalMonths = client.term || 1;
         if (interestPaid >= totalMonths - 1) {
             cuotaSugerida = client.amount + monthlyInterest;
-            descCuota = "PAGO FINAL (Capital + Interés)";
         } else {
             cuotaSugerida = monthlyInterest;
-            descCuota = "INTERÉS MENSUAL";
         }
     }
 
-    // Capitalize name
     const capitalizedName = client.name.split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
 
-    let message = `*--- QOAN SOLUCIONES FINANCIERAS ---*%0A%0A`;
-    message += `Hola *${capitalizedName}*, te enviamos el estado de cuenta actualizado de tu prestamo:%0A%0A`;
-    
-    message += `*DETALLE DEL PRÉSTAMO*%0A`;
-    message += `----------------------------%0A`;
-    message += `+ Capital: ${state.config.currency} ${client.amount.toFixed(2)}%0A`;
-    if (isInterestOnly) {
-        message += `+ Interés Mensual: ${state.config.currency} ${monthlyInterest.toFixed(2)}%0A`;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dueDate = client.collectionDate ? new Date(client.collectionDate) : new Date();
+    const diffTime = today - dueDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let message = ``;
+
+    if (mora > 0 && diffDays >= 1 && diffDays <= 2) {
+        // Nivel 2: Aviso de Vencimiento
+        message += `*AVISO DE VENCIMIENTO | QOAN* 🤖%0A%0A`;
+        message += `Estimado/a *${capitalizedName}*. Nos comunicamos de QOAN Soluciones Financieras para informarle que su pago por *${state.config.currency} ${(cuotaSugerida).toFixed(2)}*, correspondiente a la fecha *${dueDate.toLocaleDateString()}*, se encuentra actualmente en estado pendiente.%0A%0A`;
+        message += `Le invitamos a regularizar su saldo a la brevedad para evitar recargos por mora mayores. (Mora actual generada: ${state.config.currency} ${mora.toFixed(2)}).%0A%0A`;
+        message += `*Total a pagar hoy: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Quedamos atentos a su confirmación o comprobante de pago. ¡Que tenga un excelente día!_%0A%0A`;
+    } else if (mora > 0 && diffDays >= 3 && diffDays <= 6) {
+        // Nivel 3: Gestión de Cobro Firme
+        message += `*NOTIFICACIÓN DE COBRANZA | QOAN* ⚠️%0A%0A`;
+        message += `Hola, *${capitalizedName}*. Le notificamos desde el departamento de cobranza de QOAN.%0A%0A`;
+        message += `A la fecha, nuestro sistema sigue sin registrar el pago de su cuota del *${dueDate.toLocaleDateString()}*. Es importante regularizar esta situación hoy mismo para mantener el buen estado de su cuenta y evitar la acumulación diaria de intereses moratorios.%0A%0A`;
+        message += `*Detalle de la deuda:*%0A`;
+        message += `> Cuota pendiente: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
+        message += `> Mora acumulada (${diffDays} días): ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `> *TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Por favor, comuníquese con nosotros a la brevedad para confirmar su pago._%0A%0A`;
+    } else if (mora > 0 && diffDays >= 7) {
+        // Nivel 4: Último Aviso antes de Escalamiento
+        message += `*🚨 IMPORTANTE: AVISO DE ATRASO CRÍTICO | QOAN*%0A%0A`;
+        message += `Atención *${capitalizedName}*. Este es un aviso automático del sistema de QOAN Soluciones Financieras.%0A%0A`;
+        message += `Su cuenta presenta un atraso significativo desde el *${dueDate.toLocaleDateString()}*. Para evitar la suspensión de servicios financieros o el escalamiento de su caso a instancias superiores, requerimos el pago inmediato del saldo pendiente.%0A%0A`;
+        message += `*Monto Exigible Hoy:*%0A`;
+        message += `> Cuota Vencida: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
+        message += `> Intereses Moratorios: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `> *TOTAL EXIGIBLE: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Por favor, póngase en contacto directo con su asesor dentro de las próximas 24 horas para evitar mayores inconvenientes._%0A%0A`;
     } else {
-        message += `+ Interés Total: ${state.config.currency} ${(client.totalToReturn - client.amount).toFixed(2)}%0A`;
+        // Nivel 0 o por Defecto: Estado de Cuenta Normal
+        message += `*--- ESTADO DE CUENTA | QOAN ---*%0A%0A`;
+        message += `Hola *${capitalizedName}*, te enviamos tu estado de cuenta actualizado:%0A%0A`;
+        message += `*COBRO ACTUAL:*%0A`;
+        if (isInterestOnly) {
+            message += `> Concepto: *Interés Mensual*%0A`;
+        }
+        message += `> Monto: *${state.config.currency} ${cuotaSugerida.toFixed(2)}*%0A`;
+        if (mora > 0) message += `> Mora: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `> *TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A`;
+        if (client.collectionDate) message += `> Vencimiento: ${dueDate.toLocaleDateString()}%0A`;
+        message += `%0A`;
     }
-    message += `----------------------------%0A`;
-    
-    if (isInterestOnly) {
-        message += `*COBRO DEL MES:*%0A`;
-        message += `> ${descCuota}: *${state.config.currency} ${cuotaSugerida.toFixed(2)}*%0A`;
-        if (mora > 0) message += `> Mora acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
-        message += `> *TOTAL A PAGAR HOY: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A`;
-    } else {
-        message += `> Pagado a la fecha: ${state.config.currency} ${totalPaid.toFixed(2)}%0A`;
-        message += `> Saldo Pendiente: ${state.config.currency} ${client.remainingBalance.toFixed(2)}%0A`;
-        if (mora > 0) message += `> Mora acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
-        message += `*TOTAL POR PAGAR: ${state.config.currency} ${totalDueWithMora.toFixed(2)}*%0A`;
-    }
-    
-    if (client.collectionDate) {
-        message += `Vencimiento: ${new Date(client.collectionDate).toLocaleDateString()}%0A`;
-    }
-    message += `----------------------------%0A%0A`;
-    
+
     if (client.maps) {
-        message += `*Ubicacion de Cobro:*%0A`;
+        message += `*Ubicación de Cobro:*%0A`;
         message += `📍 ${client.maps}%0A%0A`;
     }
 
     message += `*PAGO VIA YAPE:*%0A`;
     message += `Cel: *${state.config.yapePhone || '900 779 111'}*%0A`;
     message += `A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*%0A%0A`;
-
-    message += `_Por favor, envía el comprobante de Yape para registrar tu pago. ¡Gracias!_`;
+    message += `_Por favor, envía tu comprobante para registrar tu pago en el sistema. ¡Gracias!_`;
 
     window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
 }
@@ -1142,21 +1280,31 @@ function sendWhatsAppReminder(id) {
     const isInterestOnly = client.loanType === 'interes';
     const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
     let cuota = client.totalToReturn / (client.term || 1);
-    let desc = "cuota";
 
     if (isInterestOnly) {
-        cuota = monthlyInterest;
-        desc = "interés mensual";
+        const interestPaidCount = client.interestPaidCount || 0;
+        const totalMonths = client.term || 1;
+        if (interestPaidCount >= totalMonths - 1) {
+            cuota = client.amount + monthlyInterest;
+        } else {
+            cuota = monthlyInterest;
+        }
     }
 
     const capitalizedName = client.name.split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
 
-    let message = `*--- QOAN RECORDATORIO DE PAGO ---*%0A%0A`;
-    message += `Hola *${capitalizedName}*, te escribimos para saludarte y recordarte que en *4 días* (el ${new Date(client.collectionDate).toLocaleDateString()}) vence tu ${desc}.%0A%0A`;
-    message += `*Monto a pagar:* ${state.config.currency} ${cuota.toFixed(2)}%0A%0A`;
-    message += `_Este es un mensaje preventivo para ayudarte con tu organización financiera. ¡Que tengas un excelente día!_`;
+    const dateStr = new Date(client.collectionDate).toLocaleDateString('es-PE', { day: '2-digit', month: 'long' });
+
+    let message = `*QOAN Soluciones Financieras* 🤖%0A%0A`;
+    message += `Hola, *${capitalizedName}*. Le escribe el asistente virtual de QOAN.%0A%0A`;
+    message += `Solo queremos enviarle un cordial recordatorio preventivo de que su próxima fecha de pago está programada para el *${dateStr}*.%0A`;
+    message += `Su saldo correspondiente a cancelar es de *${state.config.currency} ${cuota.toFixed(2)}*.%0A%0A`;
+    message += `_Si ya realizó el pago, por favor omita este mensaje. ¡Estamos a su disposición para cualquier consulta!_%0A%0A`;
+    message += `*PAGO VIA YAPE:*%0A`;
+    message += `Cel: *${state.config.yapePhone || '900 779 111'}*%0A`;
+    message += `A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*`;
 
     window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
 }
@@ -1515,6 +1663,12 @@ function setupEventListeners() {
 
     // Sort select
     if (elements.sortSelect) elements.sortSelect.onchange = () => renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active').dataset.filter);
+
+    // Smart Projection Listeners
+    const payAmountInput = document.getElementById('payment-amount');
+    const payTypeSelect = document.getElementById('payment-type-select');
+    if (payAmountInput) payAmountInput.oninput = updateSmartProjection;
+    if (payTypeSelect) payTypeSelect.onchange = updateSmartProjection;
 
     // Confirm modal
     document.getElementById('confirm-ok').onclick = () => {

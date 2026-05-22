@@ -4,3 +4,4 @@ www/
 capacitor.config.json
 *.log
 .DS_Store
+.env

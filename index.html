@@ -12,10 +12,14 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <!-- Chart.js for Reports -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </head>
 <body>
+    <div class="bg-glow">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
     <div class="app-container">
         <!-- Sidebar or Header -->
         <header class="main-header">
@@ -28,6 +32,9 @@
             <div class="header-actions">
                 <button id="btn-settings" class="btn-secondary" title="Configuración">
                     <i class="fas fa-cog"></i>
+                </button>
+                <button onclick="syncFromGitHub()" class="btn-secondary" title="Sincronizar desde GitHub" style="color: var(--success-green); border-color: var(--success-green);">
+                    <i class="fas fa-sync-alt"></i> Sincronizar
                 </button>
                 <button id="btn-import" class="btn-secondary" title="Importar Copia de Seguridad">
                     <i class="fas fa-file-import"></i> Importar
@@ -101,32 +108,7 @@
             </div>
         </section>
 
-        </section>
 
-        <!-- Advanced Reports Dashboard (For Android App View) -->
-        <section class="reports-dashboard glass" id="admin-reports-panel" style="margin-bottom:30px; display:none;">
-            <div class="section-header">
-                <h3 style="font-family:var(--font-heading);color:var(--gold-light);"><i class="fas fa-chart-pie" style="color:var(--gold-primary);margin-right:10px;"></i>Panel de Informes Gerenciales</h3>
-                <button onclick="document.getElementById('admin-reports-panel').style.display='none'" class="btn-secondary" style="padding:5px 10px; font-size:0.7rem;">Cerrar</button>
-            </div>
-            <div class="charts-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px; margin-top:20px;">
-                <div class="chart-container glass" style="padding:20px; background:rgba(0,0,0,0.3);">
-                    <h4 style="color:var(--gold-primary); font-size:0.8rem; margin-bottom:15px; text-align:center;">DISTRIBUCIÓN DE CAPITAL Y GANANCIA</h4>
-                    <canvas id="chart-distribution"></canvas>
-                </div>
-                <div class="chart-container glass" style="padding:20px; background:rgba(0,0,0,0.3);">
-                    <h4 style="color:var(--gold-primary); font-size:0.8rem; margin-bottom:15px; text-align:center;">ESTADO DE CARTERA (MES ACTUAL)</h4>
-                    <canvas id="chart-status"></canvas>
-                </div>
-            </div>
-        </section>
-
-        <!-- Botón para abrir Panel de Informes (Solo para Admin) -->
-        <div style="text-align: center; margin-bottom: 20px;">
-            <button onclick="document.getElementById('admin-reports-panel').style.display='block'; initCharts();" class="btn-primary" style="background: linear-gradient(135deg, #d4af37 0%, #aa8418 100%); border: none;">
-                <i class="fas fa-chart-line"></i> Ver Informes Detallados
-            </button>
-        </div>
 
         <!-- Main Content: Client List -->
         <main class="content-area">
@@ -294,6 +276,9 @@
                     <label for="payment-amount">Monto Recibido</label>
                     <input type="number" id="payment-amount" step="0.01" required>
                 </div>
+                
+                <!-- Smart Projection Placeholder -->
+                <div id="smart-projection"></div>
                 <button type="submit" class="btn-primary full-width">Confirmar Cobro y Generar Recibo</button>
             </form>
         </div>
@@ -340,6 +325,20 @@
                         <input type="text" id="set-yape-phone" placeholder="Ej: 900779111">
                     </div>
                 </div>
+                <div class="form-section">
+                    <h3>Sincronización Nube (GitHub)</h3>
+                    <div class="input-group">
+                        <label for="set-github-repo">Repositorio (usuario/repo)</label>
+                        <input type="text" id="set-github-repo" placeholder="Ej: os-progr/prestam">
+                    </div>
+                    <div class="input-group">
+                        <label for="set-github-token">Token de Acceso (PAT)</label>
+                        <input type="password" id="set-github-token" placeholder="ghp_xxxxxxxxxxxx">
+                    </div>
+                    <button type="button" onclick="syncToGitHub()" class="btn-secondary full-width" style="margin-top: 10px; color: var(--gold-primary); border-color: var(--gold-primary);">
+                        <i class="fas fa-cloud-upload-alt"></i> Subir Datos a GitHub
+                    </button>
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary full-width">Guardar Cambios</button>
                 </div>
@@ -372,9 +371,9 @@
                 <h2><i class="fas fa-exclamation-triangle" style="color:#f1c40f;"></i> Confirmar</h2>
             </div>
             <p id="confirm-message" style="margin-bottom:25px;color:var(--text-main);line-height:1.7;"></p>
-            <div style="display:flex;gap:15px;">
-                <button id="confirm-cancel" class="btn-secondary full-width">Cancelar</button>
-                <button id="confirm-ok" class="btn-primary full-width">Confirmar</button>
+            <div style="display:flex;gap:15px;justify-content:flex-end;">
+                <button id="confirm-cancel" class="btn-secondary">Cancelar</button>
+                <button id="confirm-ok" class="btn-primary">Confirmar</button>
             </div>
         </div>
     </div>
