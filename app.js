@@ -8,7 +8,7 @@ let state = {
         yapePhone: '900 779 111'
     },
     settings: {
-        githubRepo: '',
+        githubRepo: 'os-progr/prestam',
         githubToken: ''
     }
 };
