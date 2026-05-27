@@ -1639,6 +1639,7 @@ function setupEventListeners() {
             }
         };
         reader.readAsText(file);
+        e.target.value = ''; // Reset input to allow selecting the same file again
     };
 
     // Settings
