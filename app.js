@@ -1631,15 +1631,14 @@ function setupEventListeners() {
                 client.amount = Math.round((client.amount - amountPaid) * 100) / 100;
                 client.remainingBalance = Math.round((client.remainingBalance - amountPaid) * 100) / 100;
                 
-                // Recalculate Total to Return based on new amount
+                // Recalcular el total a devolver basado en el nuevo monto de capital
                 const remainingMonths = Math.max(1, totalInterestMonths - interestPaidCount);
                 client.totalToReturn = Math.round((client.amount + (client.amount * (client.interest / 100) * totalInterestMonths)) * 100) / 100;
                 
-                // No advance in due date for capital amortization usually
+                // Amortizar capital no avanza la fecha de cobro
                 nextDueDate = client.collectionDate;
             } else {
-                // REGULAR INTEREST PAYMENT
-                const finalAmount = Math.round((client.amount + monthlyInterest) * 100) / 100;
+                // PAGO DE INTERÉS O PAGO FINAL
                 const isFinalPayment = amountPaid >= (client.amount - 0.01); 
 
                 if (isFinalPayment) {
@@ -1649,27 +1648,45 @@ function setupEventListeners() {
                     client.interestPaidCount = totalInterestMonths;
                 } else {
                     paymentType = 'interes';
-                    client.interestPaidCount = interestPaidCount + 1;
-                    if (client.collectionDate) {
-                        const nd = new Date(client.collectionDate);
-                        nd.setMonth(nd.getMonth() + 1);
-                        nextDueDate = nd.toISOString().split('T')[0];
-                        client.collectionDate = nextDueDate;
+                    
+                    // Solo si paga el interés mensual completo (o más) avanzamos la fecha
+                    if (amountPaid >= monthlyInterest - 0.01) {
+                        client.interestPaidCount = interestPaidCount + 1;
+                        if (client.collectionDate) {
+                            const nd = new Date(client.collectionDate);
+                            nd.setMonth(nd.getMonth() + 1);
+                            nextDueDate = nd.toISOString().split('T')[0];
+                            client.collectionDate = nextDueDate;
+                        }
+                    } else {
+                        // Es un pago parcial de interés, no movemos la fecha
+                        nextDueDate = client.collectionDate;
                     }
                 }
             }
         } else {
-            // Standard fixed installment logic
+            // PRÉSTAMO FIJO (Capital + Interés)
+            const oldRemaining = client.remainingBalance;
             client.remainingBalance = Math.round((client.remainingBalance - amountPaid) * 100) / 100;
-            if (client.remainingBalance > 0 && client.collectionDate) {
-                const nd = new Date(client.collectionDate);
-                nd.setMonth(nd.getMonth() + 1);
-                nextDueDate = nd.toISOString().split('T')[0];
-                client.collectionDate = nextDueDate;
-            }
+            
             if (client.remainingBalance <= 0) {
                 client.remainingBalance = 0;
                 client.status = 'Pagado';
+            } else if (client.collectionDate) {
+                // Cálculo dinámico para ver si cubrió la cuota y avanzar la fecha
+                const cuotaMensual = client.totalToReturn / totalInterestMonths;
+                const totalPagado = client.totalToReturn - client.remainingBalance;
+                const cuotasCubiertas = Math.floor(totalPagado / cuotaMensual);
+                
+                // Recalcular la fecha de colección basada en cuotas cubiertas
+                if (client.startDate) {
+                    const nd = new Date(client.startDate + 'T12:00:00');
+                    nd.setMonth(nd.getMonth() + cuotasCubiertas + 1);
+                    nextDueDate = nd.toISOString().split('T')[0];
+                    client.collectionDate = nextDueDate;
+                } else {
+                    nextDueDate = client.collectionDate;
+                }
             }
         }
 
