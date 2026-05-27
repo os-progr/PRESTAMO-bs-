@@ -3,6 +3,89 @@ const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co'; // Reemplazar c
 const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR'; // Reemplazar con tu Anon Key
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// --- Mapeo de columnas: Supabase (minúsculas) <-> App (camelCase) ---
+function mapClientFromDB(row) {
+    return {
+        id: row.id,
+        name: row.name,
+        dni: row.dni,
+        amount: parseFloat(row.amount),
+        interest: parseFloat(row.interest),
+        term: row.term,
+        loanType: row.loantype,
+        totalToReturn: parseFloat(row.totaltoreturn),
+        remainingBalance: parseFloat(row.remainingbalance),
+        date: row.date,
+        startDate: row.startdate,
+        collectionDate: row.collectiondate,
+        status: row.status,
+        rating: parseInt(row.rating),
+        notes: row.notes,
+        maps: row.maps,
+        interestPaidCount: parseInt(row.interestpaidcount || 0),
+        payments: (row.payments || []).map(p => ({
+            id: p.id,
+            clientId: p.clientid,
+            amount: parseFloat(p.amount),
+            date: p.date,
+            paymentType: p.paymenttype
+        })),
+        phone: row.phone,
+        evidences: row.evidences || []
+    };
+}
+
+function mapClientToDB(c) {
+    return {
+        id: c.id,
+        name: c.name,
+        dni: c.dni,
+        amount: c.amount,
+        interest: c.interest,
+        term: c.term,
+        loantype: c.loanType,
+        totaltoreturn: c.totalToReturn,
+        remainingbalance: c.remainingBalance,
+        date: c.date,
+        startdate: c.startDate || null,
+        collectiondate: c.collectionDate || null,
+        status: c.status,
+        rating: c.rating || 3,
+        notes: c.notes || null,
+        maps: c.maps || null,
+        interestpaidcount: c.interestPaidCount || 0
+    };
+}
+
+function mapPaymentToDB(p, clientId) {
+    return {
+        id: p.id,
+        clientid: clientId || p.clientId,
+        amount: p.amount,
+        date: p.date,
+        paymenttype: p.paymentType
+    };
+}
+
+function mapConfigFromDB(row) {
+    return {
+        moraRate: parseFloat(row.morarate),
+        currency: row.currency,
+        yapeName: row.yapename,
+        yapePhone: row.yapephone
+    };
+}
+
+function mapConfigToDB(c) {
+    return {
+        id: 1,
+        morarate: c.moraRate,
+        currency: c.currency,
+        yapename: c.yapeName,
+        yapephone: c.yapePhone
+    };
+}
+
 // --- State Management ---
 let state = {
     clients: [],
@@ -69,20 +152,12 @@ async function init() {
     try {
         const { data: clients, error: clientsError } = await supabase.from('clients').select('*, payments(*)');
         if (clients && !clientsError) {
-            state.clients = clients.map(client => ({
-                ...client,
-                amount: parseFloat(client.amount),
-                interest: parseFloat(client.interest),
-                totalToReturn: parseFloat(client.totalToReturn),
-                remainingBalance: parseFloat(client.remainingBalance),
-                rating: parseInt(client.rating),
-                interestPaidCount: parseInt(client.interestPaidCount)
-            }));
+            state.clients = clients.map(mapClientFromDB);
         }
 
         const { data: configRows, error: configError } = await supabase.from('config').select('*').eq('id', 1);
         if (configRows && configRows.length > 0 && !configError) {
-            state.config = configRows[0];
+            state.config = mapConfigFromDB(configRows[0]);
         }
     } catch (e) {
         console.error('Error cargando datos de Supabase:', e);
@@ -119,20 +194,12 @@ async function handleRealtimeUpdate() {
     try {
         const { data: clients } = await supabase.from('clients').select('*, payments(*)');
         if (clients) {
-            state.clients = clients.map(client => ({
-                ...client,
-                amount: parseFloat(client.amount),
-                interest: parseFloat(client.interest),
-                totalToReturn: parseFloat(client.totalToReturn),
-                remainingBalance: parseFloat(client.remainingBalance),
-                rating: parseInt(client.rating),
-                interestPaidCount: parseInt(client.interestPaidCount)
-            }));
+            state.clients = clients.map(mapClientFromDB);
         }
         
         const { data: configRows } = await supabase.from('config').select('*').eq('id', 1);
         if (configRows && configRows.length > 0) {
-            state.config = configRows[0];
+            state.config = mapConfigFromDB(configRows[0]);
         }
         
         renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
@@ -197,18 +264,14 @@ function _updateLb() {
 async function saveToStorage() {
     try {
         if (state.clients.length > 0) {
-            const clientsData = state.clients.map(c => {
-                const clientObj = { ...c };
-                delete clientObj.payments; // Eliminar arreglo anidado para upsert
-                return clientObj;
-            });
+            const clientsData = state.clients.map(c => mapClientToDB(c));
             await supabase.from('clients').upsert(clientsData);
 
             // Sincronizar pagos
             const allPayments = [];
             state.clients.forEach(c => {
                 if (c.payments && c.payments.length > 0) {
-                    allPayments.push(...c.payments);
+                    c.payments.forEach(p => allPayments.push(mapPaymentToDB(p, c.id)));
                 }
             });
             
@@ -217,7 +280,7 @@ async function saveToStorage() {
             }
         }
 
-        await supabase.from('config').upsert({ id: 1, ...state.config });
+        await supabase.from('config').upsert(mapConfigToDB(state.config));
     } catch (e) {
         console.error('Error guardando en Supabase:', e);
     }

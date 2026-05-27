@@ -1,0 +1,15 @@
+id,name,dni,amount,interest,term,loantype,totaltoreturn,remainingbalance,date,startdate,collectiondate,status,rating,notes,maps,interestpaidcount
+client_1777040778492,chuya ingrid vargas de leon ,81269550,400,15,1,fijo,460,0,2026-04-24 14:26:18.492,2026-03-25 12:00:00.000,2026-04-25 12:00:00.000,Pagado,3,paga para el 07,"calle los sauces, izcuchaca, Distritro de anta cusco",0
+client_1777046315658,DANFER GIANFRANCO VASQUEZ SULLCA,61305935,200,10,1,fijo,220,220,2026-04-24 15:58:35.658,2026-03-22 12:00:00.000,2026-04-22 12:00:00.000,Pendiente,1,,"AV. La union Mz. F,Lt 4 distrito de Santiag, cusco",0
+client_1777048114195,Nancy Huallpayunca Rondan ,42476659,2000,14,5,interes,3400,3400,2026-04-24 16:28:34.195,2026-03-25 12:00:00.000,2026-08-25 12:00:00.000,Pendiente,3,,"zantiago, cusco",0
+client_1777064972087,Clever Andersson Puma Mamani,73665595,200,15,2,fijo,260,230,2026-04-24 21:09:32.087,2026-03-25 12:00:00.000,2026-05-25 12:00:00.000,Pendiente,2,,"huanacarani, comunidad patacancha",0
+client_1777065500359,Maria Emilia Sencca Huillca,75821206,500,10,1,fijo,550,0,2026-04-24 21:18:20.359,2026-03-21 12:00:00.000,2026-04-21 12:00:00.000,Pagado,3,,plaza de armas san Sebastián ,0
+client_1777065832239,Emerson Romero Yupanqui,75543038,400,15,1,fijo,460,460,2026-04-24 21:23:52.239,2026-04-22 12:00:00.000,2026-04-29 12:00:00.000,Pendiente,3,tiene que pagar el 08 viernes + su mora +10 soles,san Sebastián cusco,0
+client_1777066043445,Heidy Melanie Hualpa Mamani,60299905,500,10,1,fijo,550,0,2026-04-24 21:27:23.445,2026-03-21 12:00:00.000,2026-04-21 12:00:00.000,Pagado,3,,calle lechugal cusco,0
+client_1777310555272,Maria Fernanda Maluquis Banda ,74402496,1200,11,3,fijo,1596,1064,2026-04-27 17:22:35.273,2026-04-02 12:00:00.000,2026-07-02 12:00:00.000,Pendiente,4,,cusco,0
+client_1777311094174,Ana Lidia Huaman Apaza ,75946630,500,15,5,interes,875,875,2026-04-27 17:31:34.174,2026-04-06 12:00:00.000,2026-08-21 12:00:00.000,Pendiente,3,el 28/05/2026 escribirle para que pague de 2 meses su interes mensual de mayo y junio,"anta, cusco",0
+client_1777311441145,Fernando Bocangel Rios ,48273908,400,15,3,interes,580,580,2026-04-27 17:37:21.145,2026-03-27 12:00:00.000,2026-06-12 12:00:00.000,Pendiente,3,,"santiago, cusco",1
+client_1777313061136,Santos Teleforo Puclla Chicche ,47255799,1999.98,20,1,fijo,2399.98,2399.98,2026-04-27 18:04:21.136,2026-03-23 12:00:00.000,2026-07-23 12:00:00.000,Pendiente,3,,pampallacta,0
+client_1777388664260,Bryce Percy Anccasi Esperilla,76628263,500,15,1,fijo,575,575,2026-04-28 15:04:24.260,2026-04-28 12:00:00.000,2026-05-28 12:00:00.000,Pendiente,1,,"puno, cusco",0
+client_1777915680631,LIZANDRO OBANDO ARAGON,07642812,500,15,1,fijo,575,575,2026-05-04 17:28:00.631,2026-05-04 12:00:00.000,2026-06-04 12:00:00.000,Pendiente,3,"970906776 Fátima Obando hermana, contacto familiar",Jr Retiro L 7 Tahuantinsuyo,0
+client_1777934170090,Heidy Melanie Hualpa Mamani,60299905,500,15,2,interes,650,650,2026-05-04 22:36:10.090,2026-05-04 12:00:00.000,2026-07-04 12:00:00.000,Pendiente,3,,calle lechugal cusco,0
