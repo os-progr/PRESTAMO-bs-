@@ -2,15 +2,30 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
 const port = 3000;
+
+// Setup server and socket.io
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: '*' }
+});
 
 app.use(cors());
 app.use(express.json());
 
 // Servir los archivos estáticos (Frontend)
 app.use(express.static(path.join(__dirname)));
+
+io.on('connection', (socket) => {
+    console.log('Nuevo cliente conectado:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('Cliente desconectado:', socket.id);
+    });
+});
 
 // --- API Endpoints ---
 
@@ -93,6 +108,7 @@ app.post('/api/clients/sync', async (req, res) => {
         }
 
         await connection.commit();
+        io.emit('data_updated'); // Notificar a los clientes
         res.json({ success: true, message: 'Datos sincronizados correctamente' });
     } catch (error) {
         await connection.rollback();
@@ -107,6 +123,7 @@ app.post('/api/clients/sync', async (req, res) => {
 app.delete('/api/clients/:id', async (req, res) => {
     try {
         await db.query('DELETE FROM clients WHERE id = ?', [req.params.id]);
+        io.emit('data_updated'); // Notificar a los clientes
         res.json({ success: true, message: 'Cliente eliminado' });
     } catch (error) {
         console.error('Error eliminando cliente:', error);
@@ -142,6 +159,7 @@ app.post('/api/config', async (req, res) => {
             moraRate = ?, currency = ?, yapeName = ?, yapePhone = ?
             WHERE id = 1
         `, [moraRate, currency, yapeName, yapePhone]);
+        io.emit('data_updated'); // Notificar a los clientes
         res.json({ success: true });
     } catch (error) {
         console.error('Error actualizando config:', error);
@@ -150,6 +168,6 @@ app.post('/api/config', async (req, res) => {
 });
 
 // Iniciar servidor
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`🚀 Servidor ejecutándose en http://localhost:${port}`);
 });

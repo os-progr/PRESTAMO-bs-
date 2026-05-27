@@ -88,6 +88,27 @@ async function init() {
     setInterval(updateGreeting, 60000); // Update greeting every minute
 }
 
+// --- Socket.IO Real-time integration ---
+if (typeof io !== 'undefined') {
+    const socket = io('http://localhost:3000');
+    socket.on('data_updated', async () => {
+        console.log('Datos actualizados en el servidor, refrescando...');
+        showToast('Actualizando datos en tiempo real...', 'info');
+        try {
+            const clientsRes = await fetch('http://localhost:3000/api/clients');
+            state.clients = await clientsRes.json();
+            const configRes = await fetch('http://localhost:3000/api/config');
+            state.config = await configRes.json();
+            
+            renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
+            updateStats();
+            updateMonthlySummary();
+        } catch (e) {
+            console.error('Error recargando datos via socket:', e);
+        }
+    });
+}
+
 // --- Logic Functions ---
 
 function updateGreeting() {
