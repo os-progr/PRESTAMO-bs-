@@ -1,3 +1,8 @@
+// --- Supabase Config ---
+const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co'; // Reemplazar con tu URL
+const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR'; // Reemplazar con tu Anon Key
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // --- State Management ---
 let state = {
     clients: [],
@@ -62,12 +67,25 @@ const elements = {
 // --- Initialization ---
 async function init() {
     try {
-        const clientsRes = await fetch('http://localhost:3000/api/clients');
-        state.clients = await clientsRes.json();
-        const configRes = await fetch('http://localhost:3000/api/config');
-        state.config = await configRes.json();
+        const { data: clients, error: clientsError } = await supabase.from('clients').select('*, payments(*)');
+        if (clients && !clientsError) {
+            state.clients = clients.map(client => ({
+                ...client,
+                amount: parseFloat(client.amount),
+                interest: parseFloat(client.interest),
+                totalToReturn: parseFloat(client.totalToReturn),
+                remainingBalance: parseFloat(client.remainingBalance),
+                rating: parseInt(client.rating),
+                interestPaidCount: parseInt(client.interestPaidCount)
+            }));
+        }
+
+        const { data: configRows, error: configError } = await supabase.from('config').select('*').eq('id', 1);
+        if (configRows && configRows.length > 0 && !configError) {
+            state.config = configRows[0];
+        }
     } catch (e) {
-        console.error('Error cargando datos del backend:', e);
+        console.error('Error cargando datos de Supabase:', e);
     }
 
     updateGreeting();
@@ -88,25 +106,41 @@ async function init() {
     setInterval(updateGreeting, 60000); // Update greeting every minute
 }
 
-// --- Socket.IO Real-time integration ---
-if (typeof io !== 'undefined') {
-    const socket = io('http://localhost:3000');
-    socket.on('data_updated', async () => {
-        console.log('Datos actualizados en el servidor, refrescando...');
-        showToast('Actualizando datos en tiempo real...', 'info');
-        try {
-            const clientsRes = await fetch('http://localhost:3000/api/clients');
-            state.clients = await clientsRes.json();
-            const configRes = await fetch('http://localhost:3000/api/config');
-            state.config = await configRes.json();
-            
-            renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
-            updateStats();
-            updateMonthlySummary();
-        } catch (e) {
-            console.error('Error recargando datos via socket:', e);
+// --- Supabase Real-time integration ---
+supabase.channel('custom-all-channel')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, handleRealtimeUpdate)
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, handleRealtimeUpdate)
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'config' }, handleRealtimeUpdate)
+  .subscribe();
+
+async function handleRealtimeUpdate() {
+    console.log('Datos actualizados remotamente, refrescando...');
+    showToast('Actualizando datos en tiempo real...', 'info');
+    try {
+        const { data: clients } = await supabase.from('clients').select('*, payments(*)');
+        if (clients) {
+            state.clients = clients.map(client => ({
+                ...client,
+                amount: parseFloat(client.amount),
+                interest: parseFloat(client.interest),
+                totalToReturn: parseFloat(client.totalToReturn),
+                remainingBalance: parseFloat(client.remainingBalance),
+                rating: parseInt(client.rating),
+                interestPaidCount: parseInt(client.interestPaidCount)
+            }));
         }
-    });
+        
+        const { data: configRows } = await supabase.from('config').select('*').eq('id', 1);
+        if (configRows && configRows.length > 0) {
+            state.config = configRows[0];
+        }
+        
+        renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
+        updateStats();
+        updateMonthlySummary();
+    } catch (e) {
+        console.error('Error recargando datos via Supabase Realtime:', e);
+    }
 }
 
 // --- Logic Functions ---
@@ -160,18 +194,33 @@ function _updateLb() {
 
 // --- Logic Functions ---
 
-function saveToStorage() {
-    fetch('http://localhost:3000/api/clients/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clients: state.clients })
-    }).catch(e => console.error('Error guardando clientes:', e));
-    
-    fetch('http://localhost:3000/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state.config)
-    }).catch(e => console.error('Error guardando config:', e));
+async function saveToStorage() {
+    try {
+        if (state.clients.length > 0) {
+            const clientsData = state.clients.map(c => {
+                const clientObj = { ...c };
+                delete clientObj.payments; // Eliminar arreglo anidado para upsert
+                return clientObj;
+            });
+            await supabase.from('clients').upsert(clientsData);
+
+            // Sincronizar pagos
+            const allPayments = [];
+            state.clients.forEach(c => {
+                if (c.payments && c.payments.length > 0) {
+                    allPayments.push(...c.payments);
+                }
+            });
+            
+            if (allPayments.length > 0) {
+                await supabase.from('payments').upsert(allPayments);
+            }
+        }
+
+        await supabase.from('config').upsert({ id: 1, ...state.config });
+    } catch (e) {
+        console.error('Error guardando en Supabase:', e);
+    }
     
     updateStats();
     updateMonthlySummary();
@@ -1023,8 +1072,13 @@ function viewEvidences(id) {
 }
 
 function deleteClient(id) {
-    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', () => {
+    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', async () => {
         state.clients = state.clients.filter(c => c.id !== id);
+        try {
+            await supabase.from('clients').delete().eq('id', id);
+        } catch(e) {
+            console.error('Error eliminando de Supabase:', e);
+        }
         saveToStorage();
         renderClients();
         showToast('Operación eliminada.', 'warning');
