@@ -1,4 +1,4 @@
-id,name,dni,amount,interest,term,loantype,totaltoreturn,remainingbalance,date,startdate,collectiondate,status,rating,notes,maps,interestpaidcount
+id,name,dni,amount,interest,term,loanType,totalToReturn,remainingBalance,date,startDate,collectionDate,status,rating,notes,maps,interestPaidCount
 client_1777040778492,chuya ingrid vargas de leon ,81269550,400,15,1,fijo,460,0,2026-04-24 14:26:18.492,2026-03-25 12:00:00.000,2026-04-25 12:00:00.000,Pagado,3,paga para el 07,"calle los sauces, izcuchaca, Distritro de anta cusco",0
 client_1777046315658,DANFER GIANFRANCO VASQUEZ SULLCA,61305935,200,10,1,fijo,220,220,2026-04-24 15:58:35.658,2026-03-22 12:00:00.000,2026-04-22 12:00:00.000,Pendiente,1,,"AV. La union Mz. F,Lt 4 distrito de Santiag, cusco",0
 client_1777048114195,Nancy Huallpayunca Rondan ,42476659,2000,14,5,interes,3400,3400,2026-04-24 16:28:34.195,2026-03-25 12:00:00.000,2026-08-25 12:00:00.000,Pendiente,3,,"zantiago, cusco",0

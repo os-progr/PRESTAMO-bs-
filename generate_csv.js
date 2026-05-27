@@ -12,8 +12,8 @@ function esc(val) {
     return str;
 }
 
-// --- 1. CSV de Clients (headers en minúscula) ---
-const clientHeaders = ['id','name','dni','amount','interest','term','loantype','totaltoreturn','remainingbalance','date','startdate','collectiondate','status','rating','notes','maps','interestpaidcount'];
+// --- 1. CSV de Clients (camelCase) ---
+const clientHeaders = ['id','name','dni','amount','interest','term','loanType','totalToReturn','remainingBalance','date','startDate','collectionDate','status','rating','notes','maps','interestPaidCount'];
 
 let clientsCsv = clientHeaders.join(',') + '\n';
 
@@ -45,10 +45,10 @@ for (const c of data.clients) {
 }
 
 fs.writeFileSync('clients.csv', clientsCsv, 'utf8');
-console.log(`✅ clients.csv creado con ${data.clients.length} clientes (headers en minúscula)`);
+console.log(`✅ clients.csv creado con ${data.clients.length} clientes`);
 
-// --- 2. CSV de Payments (headers en minúscula) ---
-const paymentHeaders = ['id','clientid','amount','date','paymenttype'];
+// --- 2. CSV de Payments ---
+const paymentHeaders = ['id','clientId','amount','date','paymentType'];
 let paymentsCsv = paymentHeaders.join(',') + '\n';
 let totalPayments = 0;
 
@@ -70,6 +70,5 @@ for (const c of data.clients) {
 }
 
 fs.writeFileSync('payments.csv', paymentsCsv, 'utf8');
-console.log(`✅ payments.csv creado con ${totalPayments} pagos (headers en minúscula)`);
-
-console.log('\n🎉 ¡Listos! Sube primero clients.csv y luego payments.csv en Supabase.');
+console.log(`✅ payments.csv creado con ${totalPayments} pagos`);
+console.log('\n🎉 ¡Listos con headers camelCase!');

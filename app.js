@@ -3,7 +3,7 @@ const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co'; // Reemplazar c
 const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR'; // Reemplazar con tu Anon Key
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- Mapeo de columnas: Supabase (minúsculas) <-> App (camelCase) ---
+// --- Mapeo de columnas: Supabase <-> App ---
 function mapClientFromDB(row) {
     return {
         id: row.id,
@@ -12,23 +12,23 @@ function mapClientFromDB(row) {
         amount: parseFloat(row.amount),
         interest: parseFloat(row.interest),
         term: row.term,
-        loanType: row.loantype,
-        totalToReturn: parseFloat(row.totaltoreturn),
-        remainingBalance: parseFloat(row.remainingbalance),
+        loanType: row.loanType,
+        totalToReturn: parseFloat(row.totalToReturn),
+        remainingBalance: parseFloat(row.remainingBalance),
         date: row.date,
-        startDate: row.startdate,
-        collectionDate: row.collectiondate,
+        startDate: row.startDate,
+        collectionDate: row.collectionDate,
         status: row.status,
         rating: parseInt(row.rating),
         notes: row.notes,
         maps: row.maps,
-        interestPaidCount: parseInt(row.interestpaidcount || 0),
+        interestPaidCount: parseInt(row.interestPaidCount || 0),
         payments: (row.payments || []).map(p => ({
             id: p.id,
-            clientId: p.clientid,
+            clientId: p.clientId,
             amount: parseFloat(p.amount),
             date: p.date,
-            paymentType: p.paymenttype
+            paymentType: p.paymentType
         })),
         phone: row.phone,
         evidences: row.evidences || []
@@ -43,46 +43,46 @@ function mapClientToDB(c) {
         amount: c.amount,
         interest: c.interest,
         term: c.term,
-        loantype: c.loanType,
-        totaltoreturn: c.totalToReturn,
-        remainingbalance: c.remainingBalance,
+        "loanType": c.loanType,
+        "totalToReturn": c.totalToReturn,
+        "remainingBalance": c.remainingBalance,
         date: c.date,
-        startdate: c.startDate || null,
-        collectiondate: c.collectionDate || null,
+        "startDate": c.startDate || null,
+        "collectionDate": c.collectionDate || null,
         status: c.status,
         rating: c.rating || 3,
         notes: c.notes || null,
         maps: c.maps || null,
-        interestpaidcount: c.interestPaidCount || 0
+        "interestPaidCount": c.interestPaidCount || 0
     };
 }
 
 function mapPaymentToDB(p, clientId) {
     return {
         id: p.id,
-        clientid: clientId || p.clientId,
+        "clientId": clientId || p.clientId,
         amount: p.amount,
         date: p.date,
-        paymenttype: p.paymentType
+        "paymentType": p.paymentType
     };
 }
 
 function mapConfigFromDB(row) {
     return {
-        moraRate: parseFloat(row.morarate),
+        moraRate: parseFloat(row.moraRate),
         currency: row.currency,
-        yapeName: row.yapename,
-        yapePhone: row.yapephone
+        yapeName: row.yapeName,
+        yapePhone: row.yapePhone
     };
 }
 
 function mapConfigToDB(c) {
     return {
         id: 1,
-        morarate: c.moraRate,
+        "moraRate": c.moraRate,
         currency: c.currency,
-        yapename: c.yapeName,
-        yapephone: c.yapePhone
+        "yapeName": c.yapeName,
+        "yapePhone": c.yapePhone
     };
 }
 
