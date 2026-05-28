@@ -1,0 +1,36 @@
+{
+  "node": {
+    "0013a60a92b960a1d5d53d13570aa3c395b908fda0": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 35759,
+          "async": false,
+          "exportedName": "logout",
+          "filename": "frontend/src/app/login/actions.ts"
+        },
+        "app/page": {
+          "moduleId": 52336,
+          "async": false,
+          "exportedName": "logout",
+          "filename": "frontend/src/app/login/actions.ts"
+        }
+      },
+      "filename": "frontend/src/app/login/actions.ts",
+      "exportedName": "logout"
+    },
+    "40a44bb90066e2192a69ada9e95eac243fb6e5f44d": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 35759,
+          "async": false,
+          "exportedName": "login",
+          "filename": "frontend/src/app/login/actions.ts"
+        }
+      },
+      "filename": "frontend/src/app/login/actions.ts",
+      "exportedName": "login"
+    }
+  },
+  "edge": {},
+  "encryptionKey": "f4osQQQzdPXzsxZ6zv6wUagITxrnh1BoHdXd94njuuo="
+}

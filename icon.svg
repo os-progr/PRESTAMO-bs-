@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bf953f" />
+      <stop offset="25%" stop-color="#fcf6ba" />
+      <stop offset="50%" stop-color="#b38728" />
+      <stop offset="75%" stop-color="#fbf5b7" />
+      <stop offset="100%" stop-color="#aa771c" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="#121212" />
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#gold)" stroke-width="30" />
+  <text x="256" y="320" font-family="Arial, sans-serif" font-size="200" font-weight="bold" fill="url(#gold)" text-anchor="middle">Q</text>
+</svg>

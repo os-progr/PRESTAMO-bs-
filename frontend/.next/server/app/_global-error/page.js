@@ -1,0 +1,12 @@
+var R=require("../../chunks/ssr/[turbopack]_runtime.js")("server/app/_global-error/page.js")
+R.c("server/chunks/ssr/[root-of-the-server]__0c-47l.._.js")
+R.c("server/chunks/ssr/0r9g_next_dist_0~j75hm._.js")
+R.c("server/chunks/ssr/0r9g_0q1ghz7._.js")
+R.c("server/chunks/ssr/0r9g_next_dist_esm_build_templates_app-page_0783zgy.js")
+R.c("server/chunks/ssr/[root-of-the-server]__00f_9o0._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__0ycjum~._.js")
+R.c("server/chunks/ssr/0r9g_next_dist_compiled_@opentelemetry_api_index_0e2.725.js")
+R.c("server/chunks/ssr/0r9g_next_dist_client_components_builtin_global-error_06bh~5g.js")
+R.c("server/chunks/ssr/frontend__next-internal_server_app__global-error_page_actions_08xoqom.js")
+R.m(62894)
+module.exports=R.m(62894).exports

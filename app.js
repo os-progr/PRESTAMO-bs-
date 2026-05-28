@@ -1,91 +1,3 @@
-// --- Supabase Config ---
-const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co'; // Reemplazar con tu URL
-const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR'; // Reemplazar con tu Anon Key
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// --- Mapeo de columnas: Supabase <-> App ---
-function mapClientFromDB(row) {
-    return {
-        id: row.id,
-        name: row.name,
-        dni: row.dni,
-        amount: parseFloat(row.amount),
-        interest: parseFloat(row.interest),
-        term: row.term,
-        loanType: row.loanType,
-        totalToReturn: parseFloat(row.totalToReturn),
-        remainingBalance: parseFloat(row.remainingBalance),
-        date: row.date,
-        startDate: row.startDate,
-        collectionDate: row.collectionDate,
-        status: row.status,
-        rating: parseInt(row.rating),
-        notes: row.notes,
-        maps: row.maps,
-        interestPaidCount: parseInt(row.interestPaidCount || 0),
-        payments: (row.payments || []).map(p => ({
-            id: p.id,
-            clientId: p.clientId,
-            amount: parseFloat(p.amount),
-            date: p.date,
-            paymentType: p.paymentType
-        })),
-        phone: row.phone,
-        evidences: row.evidences || []
-    };
-}
-
-function mapClientToDB(c) {
-    return {
-        id: c.id,
-        name: c.name,
-        dni: c.dni,
-        amount: c.amount,
-        interest: c.interest,
-        term: c.term,
-        "loanType": c.loanType,
-        "totalToReturn": c.totalToReturn,
-        "remainingBalance": c.remainingBalance,
-        date: c.date,
-        "startDate": c.startDate || null,
-        "collectionDate": c.collectionDate || null,
-        status: c.status,
-        rating: c.rating || 3,
-        notes: c.notes || null,
-        maps: c.maps || null,
-        "interestPaidCount": c.interestPaidCount || 0
-    };
-}
-
-function mapPaymentToDB(p, clientId) {
-    return {
-        id: p.id,
-        "clientId": clientId || p.clientId,
-        amount: p.amount,
-        date: p.date,
-        "paymentType": p.paymentType
-    };
-}
-
-function mapConfigFromDB(row) {
-    return {
-        moraRate: parseFloat(row.moraRate),
-        currency: row.currency,
-        yapeName: row.yapeName,
-        yapePhone: row.yapePhone
-    };
-}
-
-function mapConfigToDB(c) {
-    return {
-        id: 1,
-        "moraRate": c.moraRate,
-        currency: c.currency,
-        "yapeName": c.yapeName,
-        "yapePhone": c.yapePhone
-    };
-}
-
 // --- State Management ---
 let state = {
     clients: [],
@@ -149,18 +61,31 @@ const elements = {
 
 // --- Initialization ---
 async function init() {
+    let loadedFromDB = false;
     try {
-        const { data: clients, error: clientsError } = await supabase.from('clients').select('*, payments(*)');
-        if (clients && !clientsError) {
-            state.clients = clients.map(mapClientFromDB);
-        }
-
-        const { data: configRows, error: configError } = await supabase.from('config').select('*').eq('id', 1);
-        if (configRows && configRows.length > 0 && !configError) {
-            state.config = mapConfigFromDB(configRows[0]);
+        const clientsRes = await fetch('http://localhost:3000/api/clients');
+        if (clientsRes.ok) {
+            state.clients = await clientsRes.json();
+            const configRes = await fetch('http://localhost:3000/api/config');
+            state.config = await configRes.json();
+            loadedFromDB = true;
         }
     } catch (e) {
-        console.error('Error cargando datos de Supabase:', e);
+        console.error('Error cargando datos del backend:', e);
+    }
+
+    if (!loadedFromDB) {
+        console.log('Cargando datos locales (localStorage)...');
+        const localData = localStorage.getItem('qoan_data');
+        if (localData) {
+            try {
+                const parsed = JSON.parse(localData);
+                if (parsed.clients) state.clients = parsed.clients;
+                if (parsed.config) state.config = parsed.config;
+            } catch(e) {
+                console.error("Error al leer datos locales", e);
+            }
+        }
     }
 
     updateGreeting();
@@ -181,33 +106,25 @@ async function init() {
     setInterval(updateGreeting, 60000); // Update greeting every minute
 }
 
-// --- Supabase Real-time integration ---
-supabase.channel('custom-all-channel')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, handleRealtimeUpdate)
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, handleRealtimeUpdate)
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'config' }, handleRealtimeUpdate)
-  .subscribe();
-
-async function handleRealtimeUpdate() {
-    console.log('Datos actualizados remotamente, refrescando...');
-    showToast('Actualizando datos en tiempo real...', 'info');
-    try {
-        const { data: clients } = await supabase.from('clients').select('*, payments(*)');
-        if (clients) {
-            state.clients = clients.map(mapClientFromDB);
+// --- Socket.IO Real-time integration ---
+if (typeof io !== 'undefined') {
+    const socket = io('http://localhost:3000');
+    socket.on('data_updated', async () => {
+        console.log('Datos actualizados en el servidor, refrescando...');
+        showToast('Actualizando datos en tiempo real...', 'info');
+        try {
+            const clientsRes = await fetch('http://localhost:3000/api/clients');
+            state.clients = await clientsRes.json();
+            const configRes = await fetch('http://localhost:3000/api/config');
+            state.config = await configRes.json();
+            
+            renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
+            updateStats();
+            updateMonthlySummary();
+        } catch (e) {
+            console.error('Error recargando datos via socket:', e);
         }
-        
-        const { data: configRows } = await supabase.from('config').select('*').eq('id', 1);
-        if (configRows && configRows.length > 0) {
-            state.config = mapConfigFromDB(configRows[0]);
-        }
-        
-        renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
-        updateStats();
-        updateMonthlySummary();
-    } catch (e) {
-        console.error('Error recargando datos via Supabase Realtime:', e);
-    }
+    });
 }
 
 // --- Logic Functions ---
@@ -261,29 +178,25 @@ function _updateLb() {
 
 // --- Logic Functions ---
 
-async function saveToStorage() {
-    try {
-        if (state.clients.length > 0) {
-            const clientsData = state.clients.map(c => mapClientToDB(c));
-            await supabase.from('clients').upsert(clientsData);
+function saveToStorage() {
+    // Primero, guardar siempre en localStorage para que funcione en Netlify sin backend
+    localStorage.setItem('qoan_data', JSON.stringify({
+        clients: state.clients,
+        config: state.config
+    }));
 
-            // Sincronizar pagos
-            const allPayments = [];
-            state.clients.forEach(c => {
-                if (c.payments && c.payments.length > 0) {
-                    c.payments.forEach(p => allPayments.push(mapPaymentToDB(p, c.id)));
-                }
-            });
-            
-            if (allPayments.length > 0) {
-                await supabase.from('payments').upsert(allPayments);
-            }
-        }
-
-        await supabase.from('config').upsert(mapConfigToDB(state.config));
-    } catch (e) {
-        console.error('Error guardando en Supabase:', e);
-    }
+    // Intentar sincronizar con el backend (fallará en Netlify, pero funcionará en local si se corre Node)
+    fetch('http://localhost:3000/api/clients/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clients: state.clients })
+    }).catch(e => console.warn('Error sincronizando al backend (Modo Local Activo):', e));
+    
+    fetch('http://localhost:3000/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.config)
+    }).catch(e => console.warn('Error sincronizando config (Modo Local Activo):', e));
     
     updateStats();
     updateMonthlySummary();
@@ -1135,13 +1048,8 @@ function viewEvidences(id) {
 }
 
 function deleteClient(id) {
-    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', async () => {
+    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', () => {
         state.clients = state.clients.filter(c => c.id !== id);
-        try {
-            await supabase.from('clients').delete().eq('id', id);
-        } catch(e) {
-            console.error('Error eliminando de Supabase:', e);
-        }
         saveToStorage();
         renderClients();
         showToast('Operación eliminada.', 'warning');
@@ -1631,14 +1539,15 @@ function setupEventListeners() {
                 client.amount = Math.round((client.amount - amountPaid) * 100) / 100;
                 client.remainingBalance = Math.round((client.remainingBalance - amountPaid) * 100) / 100;
                 
-                // Recalcular el total a devolver basado en el nuevo monto de capital
+                // Recalculate Total to Return based on new amount
                 const remainingMonths = Math.max(1, totalInterestMonths - interestPaidCount);
                 client.totalToReturn = Math.round((client.amount + (client.amount * (client.interest / 100) * totalInterestMonths)) * 100) / 100;
                 
-                // Amortizar capital no avanza la fecha de cobro
+                // No advance in due date for capital amortization usually
                 nextDueDate = client.collectionDate;
             } else {
-                // PAGO DE INTERÉS O PAGO FINAL
+                // REGULAR INTEREST PAYMENT
+                const finalAmount = Math.round((client.amount + monthlyInterest) * 100) / 100;
                 const isFinalPayment = amountPaid >= (client.amount - 0.01); 
 
                 if (isFinalPayment) {
@@ -1648,45 +1557,27 @@ function setupEventListeners() {
                     client.interestPaidCount = totalInterestMonths;
                 } else {
                     paymentType = 'interes';
-                    
-                    // Solo si paga el interés mensual completo (o más) avanzamos la fecha
-                    if (amountPaid >= monthlyInterest - 0.01) {
-                        client.interestPaidCount = interestPaidCount + 1;
-                        if (client.collectionDate) {
-                            const nd = new Date(client.collectionDate);
-                            nd.setMonth(nd.getMonth() + 1);
-                            nextDueDate = nd.toISOString().split('T')[0];
-                            client.collectionDate = nextDueDate;
-                        }
-                    } else {
-                        // Es un pago parcial de interés, no movemos la fecha
-                        nextDueDate = client.collectionDate;
+                    client.interestPaidCount = interestPaidCount + 1;
+                    if (client.collectionDate) {
+                        const nd = new Date(client.collectionDate);
+                        nd.setMonth(nd.getMonth() + 1);
+                        nextDueDate = nd.toISOString().split('T')[0];
+                        client.collectionDate = nextDueDate;
                     }
                 }
             }
         } else {
-            // PRÉSTAMO FIJO (Capital + Interés)
-            const oldRemaining = client.remainingBalance;
+            // Standard fixed installment logic
             client.remainingBalance = Math.round((client.remainingBalance - amountPaid) * 100) / 100;
-            
+            if (client.remainingBalance > 0 && client.collectionDate) {
+                const nd = new Date(client.collectionDate);
+                nd.setMonth(nd.getMonth() + 1);
+                nextDueDate = nd.toISOString().split('T')[0];
+                client.collectionDate = nextDueDate;
+            }
             if (client.remainingBalance <= 0) {
                 client.remainingBalance = 0;
                 client.status = 'Pagado';
-            } else if (client.collectionDate) {
-                // Cálculo dinámico para ver si cubrió la cuota y avanzar la fecha
-                const cuotaMensual = client.totalToReturn / totalInterestMonths;
-                const totalPagado = client.totalToReturn - client.remainingBalance;
-                const cuotasCubiertas = Math.floor(totalPagado / cuotaMensual);
-                
-                // Recalcular la fecha de colección basada en cuotas cubiertas
-                if (client.startDate) {
-                    const nd = new Date(client.startDate + 'T12:00:00');
-                    nd.setMonth(nd.getMonth() + cuotasCubiertas + 1);
-                    nextDueDate = nd.toISOString().split('T')[0];
-                    client.collectionDate = nextDueDate;
-                } else {
-                    nextDueDate = client.collectionDate;
-                }
             }
         }
 
@@ -1773,7 +1664,6 @@ function setupEventListeners() {
             }
         };
         reader.readAsText(file);
-        e.target.value = ''; // Reset input to allow selecting the same file again
     };
 
     // Settings

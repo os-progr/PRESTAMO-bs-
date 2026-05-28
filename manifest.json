@@ -1,0 +1,18 @@
+{
+  "name": "QOAN Soluciones Financieras",
+  "short_name": "QOAN",
+  "description": "Sistema de gestión de préstamos de alta gama",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#d4af37",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
