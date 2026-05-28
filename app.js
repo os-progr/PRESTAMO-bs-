@@ -1,9 +1,9 @@
 // --- Supabase Config ---
 const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR';
-let supabase = null;
+let supabaseClient = null;
 if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 // --- Mapeo de columnas: Supabase <-> App ---
@@ -42,6 +42,7 @@ function mapClientToDB(client) {
     const obj = { ...client };
     delete obj.payments;
     delete obj.evidences;
+    delete obj.phone;
     return obj;
 }
 
@@ -129,15 +130,15 @@ async function init() {
     let loadedFromDB = false;
 
     // 1. Intentar cargar desde Supabase
-    if (supabase) {
+    if (supabaseClient) {
         try {
-            const { data: clients, error: clientsError } = await supabase.from('clients').select('*, payments(*)');
+            const { data: clients, error: clientsError } = await supabaseClient.from('clients').select('*, payments(*)');
             if (clients && !clientsError) {
                 state.clients = clients.map(mapClientFromDB);
                 loadedFromDB = true;
             }
 
-            const { data: configRows, error: configError } = await supabase.from('config').select('*').eq('id', 1);
+            const { data: configRows, error: configError } = await supabaseClient.from('config').select('*').eq('id', 1);
             if (configRows && configRows.length > 0 && !configError) {
                 state.config = mapConfigFromDB(configRows[0]);
             }
@@ -179,14 +180,14 @@ async function init() {
 }
 
 // --- Supabase Real-time integration ---
-if (supabase) {
+if (supabaseClient) {
     try {
-        supabase.channel('custom-all-channel')
+        supabaseClient.channel('custom-all-channel')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, async () => {
               console.log('Datos actualizados en Supabase, refrescando...');
               showToast('Actualizando datos en tiempo real...', 'info');
               try {
-                  const { data: clients } = await supabase.from('clients').select('*, payments(*)');
+                  const { data: clients } = await supabaseClient.from('clients').select('*, payments(*)');
                   if (clients) {
                       state.clients = clients.map(mapClientFromDB);
                       renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
@@ -262,11 +263,11 @@ async function saveToStorage() {
     }));
 
     // 2. Sincronizar con Supabase
-    if (supabase) {
+    if (supabaseClient) {
         try {
             if (state.clients.length > 0) {
                 const clientsData = state.clients.map(c => mapClientToDB(c));
-                await supabase.from('clients').upsert(clientsData);
+                await supabaseClient.from('clients').upsert(clientsData);
 
                 const allPayments = [];
                 state.clients.forEach(c => {
@@ -276,11 +277,11 @@ async function saveToStorage() {
                 });
                 
                 if (allPayments.length > 0) {
-                    await supabase.from('payments').upsert(allPayments);
+                    await supabaseClient.from('payments').upsert(allPayments);
                 }
             }
 
-            await supabase.from('config').upsert(mapConfigToDB(state.config));
+            await supabaseClient.from('config').upsert(mapConfigToDB(state.config));
         } catch (e) {
             console.error('Error guardando en Supabase:', e);
         }
@@ -1138,10 +1139,10 @@ function viewEvidences(id) {
 function deleteClient(id) {
     showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', async () => {
         state.clients = state.clients.filter(c => c.id !== id);
-        if (supabase) {
+        if (supabaseClient) {
             try {
-                await supabase.from('payments').delete().eq('clientId', id);
-                await supabase.from('clients').delete().eq('id', id);
+                await supabaseClient.from('payments').delete().eq('clientId', id);
+                await supabaseClient.from('clients').delete().eq('id', id);
             } catch(e) {
                 console.error('Error eliminando de Supabase:', e);
             }
