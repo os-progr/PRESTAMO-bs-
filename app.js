@@ -133,6 +133,7 @@ async function init() {
     if (supabaseClient) {
         try {
             const { data: clients, error: clientsError } = await supabaseClient.from('clients').select('*, payments(*)');
+            if (clientsError) alert('Error de Supabase: ' + JSON.stringify(clientsError));
             if (clients && !clientsError) {
                 state.clients = clients.map(mapClientFromDB);
                 loadedFromDB = true;
