@@ -687,20 +687,46 @@ function renderClients(filterText = "", statusFilter = "todos") {
         const monthLabel = group.label.charAt(0).toUpperCase() + group.label.slice(1);
         const totalGrupo = group.clients.reduce((sum, c) => sum + c.remainingBalance + calculateMora(c), 0);
 
-        // Month separator header
+        // Month group container
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'month-group-container active';
+        
+        // Month separator header (Accordion toggle)
         const sep = document.createElement('div');
-        sep.className = 'month-separator';
+        sep.className = 'month-separator accordion-header';
         sep.innerHTML = `
             <div class="month-sep-left"></div>
-            <div class="month-sep-info">
-                <i class="fas fa-calendar-alt"></i>
-                <span class="month-sep-title">${monthLabel}</span>
-                <span class="month-sep-count">${group.clients.length} cliente${group.clients.length !== 1 ? 's' : ''}</span>
-                <span class="month-sep-total">${state.config.currency} ${totalGrupo.toFixed(2)}</span>
+            <div class="month-sep-info accordion-toggle">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span class="month-sep-title">${monthLabel}</span>
+                    <span class="month-sep-count">${group.clients.length} cliente${group.clients.length !== 1 ? 's' : ''}</span>
+                    <span class="month-sep-total">${state.config.currency} ${totalGrupo.toFixed(2)}</span>
+                </div>
+                <div class="accordion-icon"><i class="fas fa-chevron-up"></i></div>
             </div>
             <div class="month-sep-right"></div>
         `;
-        elements.clientsContainer.appendChild(sep);
+        
+        const contentContainer = document.createElement('div');
+        contentContainer.className = 'month-content';
+        
+        const toggleBtn = sep.querySelector('.accordion-toggle');
+        toggleBtn.addEventListener('click', () => {
+            groupContainer.classList.toggle('active');
+            const icon = sep.querySelector('.accordion-icon i');
+            if(groupContainer.classList.contains('active')) {
+                icon.className = 'fas fa-chevron-up';
+                contentContainer.style.display = 'grid';
+            } else {
+                icon.className = 'fas fa-chevron-down';
+                contentContainer.style.display = 'none';
+            }
+        });
+
+        groupContainer.appendChild(sep);
+        groupContainer.appendChild(contentContainer);
+        elements.clientsContainer.appendChild(groupContainer);
 
         group.clients.forEach(client => {
             const mora = calculateMora(client);
@@ -813,14 +839,6 @@ function renderClients(filterText = "", statusFilter = "todos") {
                     <button class="icon-btn" onclick="deleteClient('${client.id}')" title="Eliminar" style="color:var(--error-red);background:rgba(255,77,77,0.05);"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `;
-            elements.clientsContainer.appendChild(card);
-        });
-    });
-}
-
-// --- Action Handlers ---
-
-
 function openPaymentModal(id) {
     const client = state.clients.find(c => c.id === id);
     if (!client) return;

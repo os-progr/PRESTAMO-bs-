@@ -927,3 +927,48 @@ textarea:focus { outline:none; border-color:var(--gold-primary); background:rgba
     50% { transform: translate(50px, 100px) scale(1.1); }
     100% { transform: translate(-50px, 50px) scale(0.9); }
 }
+
+/* ---- ACCORDION STYLES ---- */
+.month-group-container {
+    grid-column: 1 / -1;
+    margin-bottom: 5px;
+}
+.accordion-header {
+    cursor: pointer;
+    transition: var(--transition);
+}
+.accordion-header:hover .month-sep-info {
+    background: rgba(212, 175, 55, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(212, 175, 55, 0.2);
+}
+.month-sep-info {
+    transition: var(--transition);
+    user-select: none;
+}
+.accordion-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    color: var(--gold-primary);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.month-group-container:not(.active) .accordion-icon {
+    transform: rotate(180deg);
+}
+.month-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+    margin-bottom: 25px;
+    animation: fadeIn 0.4s ease-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
