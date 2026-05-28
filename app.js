@@ -839,6 +839,13 @@ function renderClients(filterText = "", statusFilter = "todos") {
                     <button class="icon-btn" onclick="deleteClient('${client.id}')" title="Eliminar" style="color:var(--error-red);background:rgba(255,77,77,0.05);"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `;
+            contentContainer.appendChild(card);
+        });
+    });
+}
+
+// --- Action Handlers ---
+
 function openPaymentModal(id) {
     const client = state.clients.find(c => c.id === id);
     if (!client) return;
