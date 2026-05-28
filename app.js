@@ -1,8 +1,78 @@
+// --- Supabase Config ---
+const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR';
+let supabase = null;
+if (window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// --- Mapeo de columnas: Supabase <-> App ---
+function mapClientFromDB(row) {
+    return {
+        id: row.id,
+        name: row.name,
+        dni: row.dni,
+        amount: parseFloat(row.amount),
+        interest: parseFloat(row.interest),
+        term: row.term,
+        loanType: row.loanType,
+        totalToReturn: parseFloat(row.totalToReturn),
+        remainingBalance: parseFloat(row.remainingBalance),
+        date: row.date,
+        startDate: row.startDate,
+        collectionDate: row.collectionDate,
+        status: row.status,
+        rating: parseInt(row.rating),
+        notes: row.notes,
+        maps: row.maps,
+        phone: row.phone || '',
+        interestPaidCount: parseInt(row.interestPaidCount || 0),
+        payments: (row.payments || []).map(p => ({
+            id: p.id,
+            clientId: p.clientId,
+            amount: parseFloat(p.amount),
+            date: p.date,
+            paymentType: p.paymentType || 'abono'
+        })),
+        evidences: row.evidences || []
+    };
+}
+
+function mapClientToDB(client) {
+    const obj = { ...client };
+    delete obj.payments;
+    delete obj.evidences;
+    return obj;
+}
+
+function mapPaymentToDB(payment, clientId) {
+    return {
+        id: payment.id,
+        clientId: clientId,
+        amount: payment.amount,
+        date: payment.date,
+        paymentType: payment.paymentType || 'abono'
+    };
+}
+
+function mapConfigFromDB(row) {
+    return {
+        moraRate: parseFloat(row.moraRate || 0.50),
+        currency: row.currency || 'S/',
+        yapeName: row.yapeName || '',
+        yapePhone: row.yapePhone || ''
+    };
+}
+
+function mapConfigToDB(config) {
+    return { id: 1, ...config };
+}
+
 // --- State Management ---
 let state = {
     clients: [],
     config: {
-        moraRate: 0.50, // S/ 0.50 daily flat rate
+        moraRate: 0.50,
         currency: 'S/',
         yapeName: 'Juan David Puclla Quispe',
         yapePhone: '900 779 111'
@@ -23,7 +93,6 @@ const elements = {
     btnNewLoan: document.getElementById('btn-new-loan'),
     btnExportCsv: document.getElementById('btn-export-csv'),
     searchInput: document.getElementById('client-search'),
-    // Form inputs
     loanAmount: document.getElementById('loan-amount'),
     loanInterest: document.getElementById('loan-interest'),
     loanTerm: document.getElementById('loan-term'),
@@ -33,22 +102,18 @@ const elements = {
     loanCollectionDate: document.getElementById('loan-collection-date'),
     evidenceInput: document.getElementById('client-evidences'),
     previewThumbnails: document.getElementById('preview-thumbnails'),
-    // Stats
     statCapital: document.getElementById('stat-capital-calle'),
     statSocios: document.getElementById('stat-socios-conteo'),
     sortSelect: document.getElementById('sort-select'),
-    // Payment form
     paymentForm: document.getElementById('payment-form'),
     paymentDetails: document.getElementById('payment-details'),
     paymentClientId: document.getElementById('payment-client-id'),
     paymentAmount: document.getElementById('payment-amount'),
-    // Lightbox
     lightbox: document.getElementById('lightbox'),
     lightboxImg: document.getElementById('lightbox-img'),
     modalHistory: document.getElementById('modal-history'),
     historyContent: document.getElementById('history-content'),
     filterBtns: document.querySelectorAll('.filter-btn'),
-    // Settings
     btnSettings: document.getElementById('btn-settings'),
     btnImport: document.getElementById('btn-import'),
     importFileInput: document.getElementById('import-file'),
@@ -62,20 +127,28 @@ const elements = {
 // --- Initialization ---
 async function init() {
     let loadedFromDB = false;
-    try {
-        const clientsRes = await fetch('http://localhost:3000/api/clients');
-        if (clientsRes.ok) {
-            state.clients = await clientsRes.json();
-            const configRes = await fetch('http://localhost:3000/api/config');
-            state.config = await configRes.json();
-            loadedFromDB = true;
+
+    // 1. Intentar cargar desde Supabase
+    if (supabase) {
+        try {
+            const { data: clients, error: clientsError } = await supabase.from('clients').select('*, payments(*)');
+            if (clients && !clientsError) {
+                state.clients = clients.map(mapClientFromDB);
+                loadedFromDB = true;
+            }
+
+            const { data: configRows, error: configError } = await supabase.from('config').select('*').eq('id', 1);
+            if (configRows && configRows.length > 0 && !configError) {
+                state.config = mapConfigFromDB(configRows[0]);
+            }
+        } catch (e) {
+            console.error('Error cargando datos de Supabase:', e);
         }
-    } catch (e) {
-        console.error('Error cargando datos del backend:', e);
     }
 
+    // 2. Respaldo: cargar desde localStorage
     if (!loadedFromDB) {
-        console.log('Cargando datos locales (localStorage)...');
+        console.log('Supabase no disponible. Cargando datos locales (localStorage)...');
         const localData = localStorage.getItem('qoan_data');
         if (localData) {
             try {
@@ -99,32 +172,35 @@ async function init() {
     document.getElementById('set-yape-name').value = state.config.yapeName;
     document.getElementById('set-yape-phone').value = state.config.yapePhone;
     
-    // GitHub settings
     document.getElementById('set-github-repo').value = state.settings.githubRepo || '';
     document.getElementById('set-github-token').value = state.settings.githubToken || '';
 
-    setInterval(updateGreeting, 60000); // Update greeting every minute
+    setInterval(updateGreeting, 60000);
 }
 
-// --- Socket.IO Real-time integration ---
-if (typeof io !== 'undefined') {
-    const socket = io('http://localhost:3000');
-    socket.on('data_updated', async () => {
-        console.log('Datos actualizados en el servidor, refrescando...');
-        showToast('Actualizando datos en tiempo real...', 'info');
-        try {
-            const clientsRes = await fetch('http://localhost:3000/api/clients');
-            state.clients = await clientsRes.json();
-            const configRes = await fetch('http://localhost:3000/api/config');
-            state.config = await configRes.json();
-            
-            renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
-            updateStats();
-            updateMonthlySummary();
-        } catch (e) {
-            console.error('Error recargando datos via socket:', e);
-        }
-    });
+// --- Supabase Real-time integration ---
+if (supabase) {
+    try {
+        supabase.channel('custom-all-channel')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, async () => {
+              console.log('Datos actualizados en Supabase, refrescando...');
+              showToast('Actualizando datos en tiempo real...', 'info');
+              try {
+                  const { data: clients } = await supabase.from('clients').select('*, payments(*)');
+                  if (clients) {
+                      state.clients = clients.map(mapClientFromDB);
+                      renderClients(elements.searchInput.value, document.querySelector('.filter-btn.active')?.dataset.filter || 'todos');
+                      updateStats();
+                      updateMonthlySummary();
+                  }
+              } catch (e) {
+                  console.error('Error recargando datos via Supabase Realtime:', e);
+              }
+          })
+          .subscribe();
+    } catch(e) {
+        console.warn('Supabase Realtime no disponible:', e);
+    }
 }
 
 // --- Logic Functions ---
@@ -178,25 +254,37 @@ function _updateLb() {
 
 // --- Logic Functions ---
 
-function saveToStorage() {
-    // Primero, guardar siempre en localStorage para que funcione en Netlify sin backend
+async function saveToStorage() {
+    // 1. Siempre guardar en localStorage como respaldo
     localStorage.setItem('qoan_data', JSON.stringify({
         clients: state.clients,
         config: state.config
     }));
 
-    // Intentar sincronizar con el backend (fallará en Netlify, pero funcionará en local si se corre Node)
-    fetch('http://localhost:3000/api/clients/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clients: state.clients })
-    }).catch(e => console.warn('Error sincronizando al backend (Modo Local Activo):', e));
-    
-    fetch('http://localhost:3000/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state.config)
-    }).catch(e => console.warn('Error sincronizando config (Modo Local Activo):', e));
+    // 2. Sincronizar con Supabase
+    if (supabase) {
+        try {
+            if (state.clients.length > 0) {
+                const clientsData = state.clients.map(c => mapClientToDB(c));
+                await supabase.from('clients').upsert(clientsData);
+
+                const allPayments = [];
+                state.clients.forEach(c => {
+                    if (c.payments && c.payments.length > 0) {
+                        c.payments.forEach(p => allPayments.push(mapPaymentToDB(p, c.id)));
+                    }
+                });
+                
+                if (allPayments.length > 0) {
+                    await supabase.from('payments').upsert(allPayments);
+                }
+            }
+
+            await supabase.from('config').upsert(mapConfigToDB(state.config));
+        } catch (e) {
+            console.error('Error guardando en Supabase:', e);
+        }
+    }
     
     updateStats();
     updateMonthlySummary();
@@ -1048,8 +1136,16 @@ function viewEvidences(id) {
 }
 
 function deleteClient(id) {
-    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', () => {
+    showConfirm('¿Eliminar esta operación? Esta acción no se puede deshacer.', async () => {
         state.clients = state.clients.filter(c => c.id !== id);
+        if (supabase) {
+            try {
+                await supabase.from('payments').delete().eq('clientId', id);
+                await supabase.from('clients').delete().eq('id', id);
+            } catch(e) {
+                console.error('Error eliminando de Supabase:', e);
+            }
+        }
         saveToStorage();
         renderClients();
         showToast('Operación eliminada.', 'warning');
