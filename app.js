@@ -268,7 +268,8 @@ async function saveToStorage() {
         try {
             if (state.clients.length > 0) {
                 const clientsData = state.clients.map(c => mapClientToDB(c));
-                await supabaseClient.from('clients').upsert(clientsData);
+                const { error: err1 } = await supabaseClient.from('clients').upsert(clientsData);
+                if (err1) throw err1;
 
                 const allPayments = [];
                 state.clients.forEach(c => {
@@ -278,13 +279,17 @@ async function saveToStorage() {
                 });
                 
                 if (allPayments.length > 0) {
-                    await supabaseClient.from('payments').upsert(allPayments);
+                    const { error: err2 } = await supabaseClient.from('payments').upsert(allPayments);
+                    if (err2) throw err2;
                 }
             }
 
-            await supabaseClient.from('config').upsert(mapConfigToDB(state.config));
+            const { error: err3 } = await supabaseClient.from('config').upsert(mapConfigToDB(state.config));
+            if (err3) throw err3;
+            
         } catch (e) {
             console.error('Error guardando en Supabase:', e);
+            alert('Error guardando en Supabase. Detalles: ' + (e.message || e.details || JSON.stringify(e)));
         }
     }
     
