@@ -1710,6 +1710,7 @@ function setupEventListeners() {
         }
 
         client.payments.push({
+            id: 'pay_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
             date: new Date().toISOString(),
             amount: amountPaid,
             balanceAfter: client.remainingBalance,
