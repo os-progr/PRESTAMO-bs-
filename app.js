@@ -1565,45 +1565,31 @@ function viewSchedule(id) {
             <tbody>
     `;
 
-    const startDate = client.startDate ? new Date(client.startDate + 'T12:00:00') : new Date();
-    const interestPaidCount = client.interestPaidCount || 0;
+    let montoCuota = 0;
+    let tipoLabel = "Pago Único";
 
-    for (let i = 1; i <= term; i++) {
-        const dueDate = new Date(startDate);
-        dueDate.setMonth(dueDate.getMonth() + i);
-        
-        let montoCuota = 0;
-        let tipoLabel = "";
-
-        if (isInterestOnly) {
-            if (i === term) {
-                montoCuota = amount + monthlyInterest;
-                tipoLabel = "Final (Cap + Int)";
-            } else {
-                montoCuota = monthlyInterest;
-                tipoLabel = `Interés (${state.config.currency}${dailyInterest.toFixed(2)}/día)`;
-            }
-        } else {
-            montoCuota = client.totalToReturn / term;
-            tipoLabel = "Cuota Fija";
-        }
-
-        const isPaid = isInterestOnly ? (i <= interestPaidCount) : (client.status === 'Pagado' || (client.totalToReturn - client.remainingBalance) >= (montoCuota * i - 1));
-
-        html += `
-            <tr style="${isPaid ? 'opacity: 0.6; background: rgba(39,174,96,0.03);' : ''}">
-                <td><strong>${i}</strong></td>
-                <td>${dueDate.toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
-                <td>
-                    <div style="font-weight: 700; color: ${i === term ? 'var(--gold-primary)' : 'inherit'}">${state.config.currency} ${montoCuota.toFixed(2)}</div>
-                    <div style="font-size: 0.65rem; color: var(--text-muted);">${tipoLabel}</div>
-                </td>
-                <td>
-                    ${isPaid ? '<span style="color: var(--success-green);"><i class="fas fa-check-circle"></i> Pagado</span>' : '<span style="color: var(--text-muted);">Pendiente</span>'}
-                </td>
-            </tr>
-        `;
+    if (isInterestOnly) {
+        montoCuota = monthlyInterest;
+        tipoLabel = `Solo Interés`;
+    } else {
+        montoCuota = client.totalToReturn;
     }
+
+    const isPaid = client.status === 'Pagado' || client.remainingBalance <= 0;
+
+    html += `
+        <tr style="${isPaid ? 'opacity: 0.6; background: rgba(39,174,96,0.03);' : ''}">
+            <td><strong>1</strong></td>
+            <td>${new Date(client.collectionDate || new Date()).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</td>
+            <td>
+                <div style="font-weight: 700; color: var(--gold-primary)">${state.config.currency} ${montoCuota.toFixed(2)}</div>
+                <div style="font-size: 0.65rem; color: var(--text-muted);">${tipoLabel}</div>
+            </td>
+            <td>
+                ${isPaid ? '<span style="color: var(--success-green);"><i class="fas fa-check-circle"></i> Pagado</span>' : '<span style="color: var(--text-muted);">Pendiente</span>'}
+            </td>
+        </tr>
+    `;
 
     html += `</tbody></table>`;
     
