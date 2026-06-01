@@ -177,7 +177,43 @@ async function init() {
     document.getElementById('set-github-repo').value = state.settings.githubRepo || '';
     document.getElementById('set-github-token').value = state.settings.githubToken || '';
 
+    checkWeeklySummary();
+
     setInterval(updateGreeting, 60000);
+}
+
+function checkWeeklySummary() {
+    const today = new Date();
+    // 1 = Lunes
+    if (today.getDay() === 1) {
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - 7);
+        lastMonday.setHours(0,0,0,0);
+        
+        const lastCheck = localStorage.getItem('lastWeeklySummary');
+        const checkDateStr = today.toISOString().split('T')[0];
+        
+        if (lastCheck !== checkDateStr) {
+            let weeklyInterest = 0;
+            state.clients.forEach(c => {
+                if (c.payments) {
+                    c.payments.forEach(p => {
+                        if (p.paymentType === 'interes') {
+                            const pDate = new Date(p.date);
+                            if (pDate >= lastMonday && pDate <= today) {
+                                weeklyInterest += p.amount;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            setTimeout(() => {
+                showToast(`📈 Resumen Semanal: Has cobrado ${state.config.currency} ${weeklyInterest.toFixed(2)} en intereses los últimos 7 días.`, 'success');
+                localStorage.setItem('lastWeeklySummary', checkDateStr);
+            }, 3000); // Delayed a bit so it shows up after initial load
+        }
+    }
 }
 
 // --- Supabase Real-time integration ---
@@ -314,9 +350,12 @@ function updateSmartProjection() {
 
     if (type === 'capital' && amount > 0) {
         const currentInterest = Math.round((client.amount * (client.interest / 100)) * 100) / 100;
+        const currentDaily = Math.round((currentInterest / 30) * 100) / 100;
         const newCapital = Math.max(0, client.amount - amount);
         const newInterest = Math.round((newCapital * (client.interest / 100)) * 100) / 100;
+        const newDaily = Math.round((newInterest / 30) * 100) / 100;
         const savings = Math.max(0, currentInterest - newInterest);
+        const dailySavings = Math.max(0, currentDaily - newDaily);
         
         container.innerHTML = `
             <div style="background:rgba(0, 255, 136, 0.08); border:1px solid rgba(0, 255, 136, 0.2); padding:15px; border-radius:12px; margin:10px 0 20px 0; animation: revealCard 0.4s ease-out;">
@@ -332,6 +371,14 @@ function updateSmartProjection() {
                         <span style="font-size:0.6rem; color:var(--text-muted); display:block; text-transform:uppercase;">Ahorro Mensual</span>
                         <span style="font-size:1.2rem; color:var(--success-green); font-weight:800;">-${state.config.currency} ${savings.toFixed(2)}</span>
                     </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 12px; background:rgba(0,255,136,0.04); border-radius:8px; border:1px dashed rgba(0,255,136,0.15);">
+                    <i class="fas fa-clock" style="font-size:0.65rem; color:var(--success-green);"></i>
+                    <span style="font-size:0.7rem; color:var(--text-muted);">Interés diario:</span>
+                    <span style="font-size:0.8rem; color:var(--text-muted); text-decoration:line-through;">${state.config.currency} ${currentDaily.toFixed(2)}</span>
+                    <i class="fas fa-arrow-right" style="font-size:0.5rem; color:var(--success-green);"></i>
+                    <span style="font-size:0.85rem; color:var(--success-green); font-weight:800;">${state.config.currency} ${newDaily.toFixed(2)}</span>
+                    <span style="font-size:0.65rem; color:var(--success-green);">(-${state.config.currency}${dailySavings.toFixed(2)}/día)</span>
                 </div>
                 <p style="font-size:0.65rem; color:var(--text-muted); margin-top:8px; font-style:italic;">* El cliente pagará menos interés todos los meses siguientes.</p>
             </div>
@@ -441,6 +488,7 @@ function updateStats() {
     let totalCapitalEnCalle = 0;
     let totalInteresEnCalle = 0;
     let totalInteresCobrado = 0;
+    let totalRentabilidadDiaria = 0;
     let activeSocios = 0;
     let upcomingClients = [];
     let reminderToday = []; // Clients due in exactly 4 days
@@ -480,10 +528,13 @@ function updateStats() {
                 totalCobrar += client.amount + pendingInterest;
                 totalCapitalEnCalle += client.amount;
                 totalInteresEnCalle += pendingInterest;
+                totalRentabilidadDiaria += (monthlyInterest / 30);
             } else {
                 totalCobrar += client.remainingBalance;
                 totalCapitalEnCalle += (client.remainingBalance * (client.amount / client.totalToReturn));
                 totalInteresEnCalle += (client.remainingBalance * interestRatio);
+                const termDays = (client.term || 1) * 30;
+                totalRentabilidadDiaria += (totalInterest / termDays);
             }
 
             activeSocios++;
@@ -543,6 +594,9 @@ function updateStats() {
     if (document.getElementById('stat-ganancia-pendiente')) {
         document.getElementById('stat-ganancia-pendiente').textContent = `${state.config.currency} ${totalInteresEnCalle.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
     }
+    if (document.getElementById('stat-rentabilidad-diaria')) {
+        document.getElementById('stat-rentabilidad-diaria').textContent = `${state.config.currency} ${totalRentabilidadDiaria.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    }
     
     elements.statSocios.textContent = activeSocios;
 
@@ -560,6 +614,10 @@ function updateStats() {
     } else {
         alertUpcoming.style.display = "none";
     }
+
+    if (typeof updateCharts === 'function') {
+        updateCharts();
+    }
 }
 
 
@@ -572,10 +630,11 @@ function calculateLoanPreview() {
 
     const totalInterest = Math.round((amount * (interest / 100) * term) * 100) / 100;
     const totalReturn = Math.round((amount + totalInterest) * 100) / 100;
+    const monthlyInterest = Math.round((amount * (interest / 100)) * 100) / 100;
+    const dailyInterest = Math.round((monthlyInterest / 30) * 100) / 100;
     
     let previewText = "";
     if (type === 'interes' && term > 1) {
-        const monthlyInterest = Math.round((amount * (interest / 100)) * 100) / 100;
         const finalPayment = Math.round((amount + monthlyInterest) * 100) / 100;
         previewText = `${term - 1} cuotas de ${state.config.currency}${monthlyInterest.toFixed(2)} + 1 cuota final de ${state.config.currency}${finalPayment.toFixed(2)}`;
     } else {
@@ -585,6 +644,50 @@ function calculateLoanPreview() {
 
     elements.calcTotal.innerHTML = `<span style="color:var(--gold-primary); font-weight:bold;">${state.config.currency} ${totalReturn.toFixed(2)}</span>`;
     elements.calcCuota.textContent = previewText;
+
+    const calcGanancia = document.getElementById('calc-ganancia');
+    if (calcGanancia) {
+        calcGanancia.innerHTML = `<span style="font-weight:bold;">${state.config.currency} ${totalInterest.toFixed(2)}</span>`;
+    }
+
+    // Daily interest breakdown panel
+    let dailyPanel = document.getElementById('daily-interest-panel');
+    if (!dailyPanel) {
+        dailyPanel = document.createElement('div');
+        dailyPanel.id = 'daily-interest-panel';
+        const calcCuotaParent = elements.calcCuota.closest('.input-group');
+        if (calcCuotaParent && calcCuotaParent.parentNode) {
+            calcCuotaParent.parentNode.appendChild(dailyPanel);
+        }
+    }
+    if (amount > 0 && interest > 0) {
+        dailyPanel.style.display = 'block';
+        dailyPanel.style.gridColumn = 'span 2';
+        dailyPanel.innerHTML = `
+            <div style="background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);border-radius:12px;padding:14px 16px;margin-top:6px;animation:revealCard 0.3s ease-out;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <i class="fas fa-clock" style="color:var(--gold-primary);font-size:0.8rem;"></i>
+                    <span style="font-size:0.65rem;color:var(--gold-primary);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;">Desglose de Interés</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
+                    <div style="background:rgba(255,255,255,0.03);padding:10px 8px;border-radius:10px;">
+                        <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Por Mes</div>
+                        <div style="font-size:1.1rem;color:#fff;font-weight:800;">${state.config.currency} ${monthlyInterest.toFixed(2)}</div>
+                    </div>
+                    <div style="background:rgba(212,175,55,0.08);padding:10px 8px;border-radius:10px;border:1px solid rgba(212,175,55,0.15);">
+                        <div style="font-size:0.6rem;color:var(--gold-primary);text-transform:uppercase;margin-bottom:4px;font-weight:700;">Por Día</div>
+                        <div style="font-size:1.1rem;color:var(--gold-primary);font-weight:800;">${state.config.currency} ${dailyInterest.toFixed(2)}</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);padding:10px 8px;border-radius:10px;">
+                        <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Total ${term}m</div>
+                        <div style="font-size:1.1rem;color:#fff;font-weight:800;">${state.config.currency} ${totalInterest.toFixed(2)}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        dailyPanel.style.display = 'none';
+    }
 }
 
 // --- Monthly Summary ---
@@ -748,9 +851,33 @@ function renderClients(filterText = "", statusFilter = "todos") {
 
             const isInterestOnly = client.loanType === 'interes';
             const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
+            const dailyInterest = isInterestOnly ? Math.round((monthlyInterest / 30) * 100) / 100 : 0;
             const interestPaid = client.interestPaidCount || 0;
             const totalMonths = client.term || 1;
             const isLastInterestMonth = isInterestOnly && (interestPaid >= totalMonths - 1);
+
+            let daysElapsedText = "";
+            if (isInterestOnly && client.status !== 'Pagado') {
+                let lastDate = client.startDate ? new Date(client.startDate) : new Date(client.date);
+                if (client.collectionDate) {
+                    const tempDate = new Date(client.collectionDate);
+                    tempDate.setMonth(tempDate.getMonth() - 1);
+                    lastDate = tempDate;
+                }
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                lastDate.setHours(0,0,0,0);
+                const diffTime = today - lastDate;
+                const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                const accumInterest = diffDays * dailyInterest;
+                
+                daysElapsedText = `
+                    <div style="margin-top:12px; padding:8px 12px; background:rgba(0,255,136,0.06); border-left:3px solid var(--success-green); border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.7rem; color:var(--text-muted);"><i class="fas fa-calendar-day" style="color:var(--success-green); margin-right:6px;"></i>Llevas ${diffDays} días</span>
+                        <span style="font-size:0.85rem; color:var(--success-green); font-weight:800;">+${state.config.currency} ${accumInterest.toFixed(2)}</span>
+                    </div>
+                `;
+            }
 
             card.className = `client-card glass ${hasMora ? 'mora-active' : ''} ${isUpcoming ? 'upcoming-active' : ''} ${isReminderDay ? 'reminder-active' : ''} ${isInterestOnly ? 'interest-only-mode' : ''}`;
             card.dataset.clientId = client.id;
@@ -798,6 +925,7 @@ function renderClients(filterText = "", statusFilter = "todos") {
                             <span class="value" style="font-size:1.5rem;color:#fff;font-weight:800;">${state.config.currency} ${(client.remainingBalance + mora).toFixed(2)}</span>
                             <span style="font-size:0.7rem;color:var(--text-muted);">con mora</span>
                         </div>
+                        ${daysElapsedText}
                         ${isInterestOnly && client.status !== 'Pagado' ? `
                             <div style="margin-top:15px; padding:15px; background:rgba(212,175,55,0.06); border-radius:12px; border:1px solid rgba(212,175,55,0.15); box-shadow:inset 0 0 15px rgba(212,175,55,0.05); position:relative;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -809,6 +937,12 @@ function renderClients(filterText = "", statusFilter = "todos") {
                                 <div style="display:flex; align-items:baseline; gap:5px;">
                                     <span style="font-size:1.4rem; color:#fff; font-weight:800; font-family:var(--font-heading);">${state.config.currency} ${(isLastInterestMonth ? (client.amount + monthlyInterest + mora) : (monthlyInterest + mora)).toFixed(2)}</span>
                                     <span style="font-size:0.75rem; color:var(--gold-light); opacity:0.8;">${mora > 0 ? '+ mora' : ''}</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 10px; background:rgba(212,175,55,0.04); border-radius:8px; border:1px dashed rgba(212,175,55,0.12);">
+                                    <i class="fas fa-clock" style="font-size:0.6rem; color:var(--gold-primary); opacity:0.7;"></i>
+                                    <span style="font-size:0.7rem; color:var(--text-muted);">Interés diario:</span>
+                                    <span style="font-size:0.85rem; color:var(--gold-primary); font-weight:800;">${state.config.currency} ${(Math.round((monthlyInterest / 30) * 100) / 100).toFixed(2)}</span>
+                                    <span style="font-size:0.6rem; color:var(--text-muted); opacity:0.6;">/día</span>
                                 </div>
                             </div>
                         ` : ''}
@@ -868,8 +1002,28 @@ function openPaymentModal(id) {
     let detailsHtml = `<div style="margin-bottom:16px;">`;
     detailsHtml += `<p style="margin-bottom:6px;"><strong>Cliente:</strong> ${client.name}</p>`;
 
+    let exactDaysBtnHTML = '';
+
     if (isInterestOnly) {
         const interesYaPagado = Math.round(interestPaid * monthlyInterest * 100) / 100;
+        const dailyInterestPayModal = Math.round((monthlyInterest / 30) * 100) / 100;
+
+        let lastDate = client.startDate ? new Date(client.startDate) : new Date(client.date);
+        if (client.collectionDate) {
+            const tempDate = new Date(client.collectionDate);
+            tempDate.setMonth(tempDate.getMonth() - 1);
+            lastDate = tempDate;
+        }
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        lastDate.setHours(0,0,0,0);
+        const diffDays = Math.max(0, Math.ceil((today - lastDate) / (1000 * 60 * 60 * 24)));
+        const exactInterest = diffDays * dailyInterestPayModal;
+
+        if (diffDays > 0) {
+            exactDaysBtnHTML = `<button type="button" onclick="document.getElementById('payment-amount').value='${(exactInterest + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(0,188,212,0.15);border:1px solid #00bcd4;border-radius:8px;color:#00bcd4;font-weight:700;cursor:pointer;font-size:0.75rem;">⏳ ${diffDays} Días<br>${state.config.currency}${(exactInterest+mora).toFixed(2)}</button>`;
+        }
+
         detailsHtml += `
             <div style="background:rgba(212,175,55,0.08);border-left:3px solid var(--gold-primary);padding:12px;border-radius:8px;margin:10px 0;">
                 <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📋 Modalidad: Solo Interés Mensual</p>
@@ -878,6 +1032,12 @@ function openPaymentModal(id) {
                     <div><span style="font-size:0.7rem;color:var(--text-muted);">Interés/mes</span><br><strong style="color:var(--gold-primary);">${state.config.currency} ${monthlyInterest.toFixed(2)}</strong></div>
                     <div><span style="font-size:0.7rem;color:var(--text-muted);">Cuotas pagadas</span><br><strong style="color:var(--success-green);">${interestPaid} / ${totalInterestMonths}</strong></div>
                     <div><span style="font-size:0.7rem;color:var(--text-muted);">Interés cobrado</span><br><strong style="color:var(--success-green);">${state.config.currency} ${interesYaPagado.toFixed(2)}</strong></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 12px;background:rgba(212,175,55,0.06);border-radius:8px;border:1px dashed rgba(212,175,55,0.2);">
+                    <i class="fas fa-clock" style="font-size:0.7rem;color:var(--gold-primary);"></i>
+                    <span style="font-size:0.75rem;color:var(--text-muted);">Genera</span>
+                    <strong style="font-size:0.9rem;color:var(--gold-primary);">${state.config.currency} ${dailyInterestPayModal.toFixed(2)}</strong>
+                    <span style="font-size:0.75rem;color:var(--text-muted);">por día de interés</span>
                 </div>
             </div>`;
 
@@ -911,8 +1071,9 @@ function openPaymentModal(id) {
     // Quick-fill buttons
     let quickBtns = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">`;
     if (isInterestOnly) {
-        quickBtns += `<button type="button" onclick="document.getElementById('payment-amount').value='${(monthlyInterest + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(39,174,96,0.15);border:1px solid var(--success-green);border-radius:8px;color:var(--success-green);font-weight:700;cursor:pointer;font-size:0.8rem;">✔ Solo Interés<br>${state.config.currency}${(monthlyInterest+mora).toFixed(2)}</button>`;
-        quickBtns += `<button type="button" onclick="document.getElementById('payment-amount').value='${(finalAmount + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(212,175,55,0.15);border:1px solid var(--gold-primary);border-radius:8px;color:var(--gold-primary);font-weight:700;cursor:pointer;font-size:0.8rem;">🏁 Pago Final<br>${state.config.currency}${(finalAmount+mora).toFixed(2)}</button>`;
+        if (exactDaysBtnHTML) quickBtns += exactDaysBtnHTML;
+        quickBtns += `<button type="button" onclick="document.getElementById('payment-amount').value='${(monthlyInterest + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(39,174,96,0.15);border:1px solid var(--success-green);border-radius:8px;color:var(--success-green);font-weight:700;cursor:pointer;font-size:0.75rem;">✔ 1 Mes<br>${state.config.currency}${(monthlyInterest+mora).toFixed(2)}</button>`;
+        quickBtns += `<button type="button" onclick="document.getElementById('payment-amount').value='${(finalAmount + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(212,175,55,0.15);border:1px solid var(--gold-primary);border-radius:8px;color:var(--gold-primary);font-weight:700;cursor:pointer;font-size:0.75rem;">🏁 Final<br>${state.config.currency}${(finalAmount+mora).toFixed(2)}</button>`;
     } else {
         quickBtns += `<button type="button" onclick="document.getElementById('payment-amount').value='${(client.remainingBalance + mora).toFixed(2)}'" style="flex:1;padding:8px;background:rgba(212,175,55,0.15);border:1px solid var(--gold-primary);border-radius:8px;color:var(--gold-primary);font-weight:700;cursor:pointer;font-size:0.8rem;">💯 Total<br>${state.config.currency}${(client.remainingBalance+mora).toFixed(2)}</button>`;
     }
@@ -1144,6 +1305,11 @@ function sendWhatsApp(id) {
         message += `%0A`;
     }
 
+    if (isInterestOnly && client.status !== 'Pagado') {
+        const dailyInt = (monthlyInterest / 30).toFixed(2);
+        message += `%0A💡 _Recuerda: Tu préstamo genera *${state.config.currency} ${dailyInt}* de interés cada día que pasa._%0A%0A`;
+    }
+
     if (client.maps) {
         message += `📍 *Ubicación de cobro:* ${client.maps}%0A%0A`;
     }
@@ -1362,6 +1528,10 @@ function viewHistory(id) {
     if (!client.payments || client.payments.length === 0) {
         html += `<tr><td colspan="4" style="text-align:center; padding: 40px; color: var(--text-muted);">No se han registrado pagos para esta operación.</td></tr>`;
     } else {
+        const isInterestOnly = client.loanType === 'interes';
+        const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
+        const dailyInterest = isInterestOnly ? Math.round((monthlyInterest / 30) * 100) / 100 : 0;
+
         [...client.payments].reverse().forEach((p, index) => {
             // Original index is needed for deletion
             const originalIndex = client.payments.indexOf(p);
@@ -1369,13 +1539,23 @@ function viewHistory(id) {
                 : p.paymentType === 'final' ? '<span style="font-size:0.65rem;background:rgba(212,175,55,0.15);color:var(--gold-primary);border-radius:4px;padding:2px 6px;margin-left:4px;">Pago Final</span>'
                 : p.paymentType === 'amortizacion' ? '<span style="font-size:0.65rem;background:rgba(155,89,182,0.15);color:#9b59b6;border-radius:4px;padding:2px 6px;margin-left:4px;">Cap. Amortizado</span>'
                 : '';
+            
+            let daysCoveredHtml = '';
+            if (p.paymentType === 'interes' && dailyInterest > 0) {
+                const daysCovered = Math.round(p.amount / dailyInterest);
+                daysCoveredHtml = `<div style="font-size:0.65rem; color:var(--gold-primary); margin-top:2px;">Equivale a ~${daysCovered} días</div>`;
+            }
+
             html += `
                 <tr>
                     <td>
                         <div style="font-weight: 600;">${new Date(p.date).toLocaleDateString()}</div>
                         <div style="font-size: 0.7rem; color: var(--text-muted);">${new Date(p.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                     </td>
-                    <td style="color: var(--success-green); font-weight: 700;">${state.config.currency} ${p.amount.toFixed(2)}${typeLabel}</td>
+                    <td style="color: var(--success-green); font-weight: 700;">
+                        ${state.config.currency} ${p.amount.toFixed(2)}${typeLabel}
+                        ${daysCoveredHtml}
+                    </td>
                     <td>${state.config.currency} ${p.balanceAfter.toFixed(2)}</td>
                     <td style="text-align: right;">
                         <button class="icon-btn" onclick="deletePayment('${client.id}', ${originalIndex})" title="Anular Pago" style="color: var(--error-red); background: rgba(255, 77, 77, 0.1); border-color: rgba(255, 77, 77, 0.2); width: 32px; height: 32px; font-size: 0.8rem; display: inline-flex;">
@@ -1401,11 +1581,28 @@ function viewSchedule(id) {
     const amount = client.amount;
     const interestRate = client.interest;
     const monthlyInterest = Math.round((amount * (interestRate / 100)) * 100) / 100;
+    const dailyInterest = Math.round((monthlyInterest / 30) * 100) / 100;
     
     let html = `
         <div style="background: rgba(39, 174, 96, 0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid var(--success-green);">
             <h3 style="color: var(--success-green); margin-bottom: 5px;">Cronograma de Pagos</h3>
             <p style="font-size: 0.8rem; color: var(--text-muted);">Basado en: ${isInterestOnly ? 'Solo Interés Mensual' : 'Cuotas Fijas'}</p>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:20px;padding:14px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.15);border-radius:12px;margin-bottom:20px;">
+            <div style="text-align:center;">
+                <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Interés/Mes</div>
+                <div style="font-size:1.15rem;color:#fff;font-weight:800;">${state.config.currency} ${monthlyInterest.toFixed(2)}</div>
+            </div>
+            <div style="width:1px;height:35px;background:rgba(212,175,55,0.2);"></div>
+            <div style="text-align:center;background:rgba(212,175,55,0.08);padding:8px 16px;border-radius:10px;border:1px solid rgba(212,175,55,0.2);">
+                <div style="font-size:0.6rem;color:var(--gold-primary);text-transform:uppercase;margin-bottom:3px;font-weight:700;"><i class="fas fa-clock" style="margin-right:4px;"></i>Interés/Día</div>
+                <div style="font-size:1.15rem;color:var(--gold-primary);font-weight:800;">${state.config.currency} ${dailyInterest.toFixed(2)}</div>
+            </div>
+            <div style="width:1px;height:35px;background:rgba(212,175,55,0.2);"></div>
+            <div style="text-align:center;">
+                <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Total Interés</div>
+                <div style="font-size:1.15rem;color:#fff;font-weight:800;">${state.config.currency} ${(monthlyInterest * term).toFixed(2)}</div>
+            </div>
         </div>
         <table class="history-table">
             <thead>
@@ -1435,7 +1632,7 @@ function viewSchedule(id) {
                 tipoLabel = "Final (Cap + Int)";
             } else {
                 montoCuota = monthlyInterest;
-                tipoLabel = "Interés";
+                tipoLabel = `Interés (${state.config.currency}${dailyInterest.toFixed(2)}/día)`;
             }
         } else {
             montoCuota = client.totalToReturn / term;
@@ -1603,6 +1800,35 @@ function setupEventListeners() {
             e.target.style.display = "none";
         }
     });
+
+    // Calculator Simulator
+    const btnCalculator = document.getElementById('btn-calculator');
+    const modalCalculator = document.getElementById('modal-calculator');
+    if (btnCalculator && modalCalculator) {
+        btnCalculator.onclick = () => {
+            modalCalculator.style.display = 'flex';
+            calculateSimulator();
+        };
+
+        const calcInputs = ['calc-sim-amount', 'calc-sim-interest', 'calc-sim-days'];
+        calcInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.oninput = calculateSimulator;
+        });
+    }
+
+    function calculateSimulator() {
+        const amount = parseFloat(document.getElementById('calc-sim-amount').value) || 0;
+        const interestRate = parseFloat(document.getElementById('calc-sim-interest').value) || 0;
+        const days = parseInt(document.getElementById('calc-sim-days').value) || 0;
+
+        const monthlyInterest = (amount * (interestRate / 100));
+        const dailyInterest = monthlyInterest / 30;
+        const totalProfit = dailyInterest * days;
+
+        document.getElementById('calc-sim-result').textContent = `${state.config.currency} ${totalProfit.toFixed(2)}`;
+        document.getElementById('calc-sim-daily').textContent = `Interés diario: ${state.config.currency} ${dailyInterest.toFixed(2)} /día`;
+    }
 
     // Form Calculations
     [elements.loanAmount, elements.loanInterest, elements.loanTerm].forEach(input => {
@@ -1959,3 +2185,90 @@ function toBase64(file) {
 
 // Start the app
 init();
+
+let profitChartInstance = null;
+
+function updateCharts() {
+    const ctx = document.getElementById('profitChart');
+    if (!ctx) return;
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    // Last 7 days including today
+    const labels = [];
+    const data = [];
+    
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric' }));
+        
+        // Sum interest for this day
+        let dayTotal = 0;
+        state.clients.forEach(c => {
+            if (c.payments) {
+                c.payments.forEach(p => {
+                    if (p.paymentType === 'interes' || p.paymentType === 'final') {
+                        const pDate = new Date(p.date);
+                        pDate.setHours(0,0,0,0);
+                        if (pDate.getTime() === d.getTime()) {
+                            if (p.paymentType === 'final') {
+                                // Approximate interest portion for final payment
+                                const isInterestOnly = c.loanType === 'interes';
+                                const monthlyInterest = isInterestOnly ? Math.round((c.amount * (c.interest / 100)) * 100) / 100 : 0;
+                                dayTotal += monthlyInterest;
+                            } else {
+                                dayTotal += p.amount;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        data.push(dayTotal);
+    }
+
+    if (profitChartInstance) {
+        profitChartInstance.data.labels = labels;
+        profitChartInstance.data.datasets[0].data = data;
+        profitChartInstance.update();
+    } else {
+        if (typeof Chart !== 'undefined') {
+            profitChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Intereses Cobrados (S/)',
+                        data: data,
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#2ecc71',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255, 255, 255, 0.7)' }
+                        }
+                    }
+                }
+            });
+        }
+    }
+}

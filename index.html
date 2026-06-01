@@ -30,6 +30,9 @@
                 <span>Cargando...</span>
             </div>
             <div class="header-actions">
+                <button id="btn-calculator" class="btn-secondary" title="Calculadora Rápida" style="color: var(--gold-light); border-color: var(--gold-light);">
+                    <i class="fas fa-calculator"></i> Calculadora
+                </button>
                 <button id="btn-settings" class="btn-secondary" title="Configuración">
                     <i class="fas fa-cog"></i>
                 </button>
@@ -89,6 +92,14 @@
                     <small style="color: var(--text-muted)">(En la calle)</small>
                 </div>
             </div>
+            <div class="stat-card glass" style="border-left: 3px solid #2ecc71;">
+                <div class="stat-icon" style="background: rgba(46, 204, 113, 0.1); color: #2ecc71; border-color: rgba(46, 204, 113, 0.2);"><i class="fas fa-coins"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Rentabilidad Diaria</span>
+                    <h2 id="stat-rentabilidad-diaria" class="stat-value" style="color: #2ecc71;">S/ 0.00</h2>
+                    <small style="color: var(--text-muted)">(De préstamos activos)</small>
+                </div>
+            </div>
             <div class="stat-card glass alert-card" id="alert-upcoming" style="display: none; cursor: pointer;" title="Clic para filtrar lista">
                 <div class="stat-icon gold"><i class="fas fa-bell"></i></div>
                 <div class="stat-info">
@@ -108,7 +119,15 @@
             </div>
         </section>
 
-
+        <!-- Charts Dashboard -->
+        <section class="dashboard-charts" style="margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 20px;">
+            <div class="chart-container glass" style="padding: 20px; border-radius: 16px;">
+                <h3 style="color: var(--gold-primary); font-family: var(--font-heading); font-size: 1.1rem; margin-bottom: 15px;"><i class="fas fa-chart-area"></i> Tendencia de Intereses Cobrados (Últimos 7 días)</h3>
+                <div style="position: relative; height: 250px; width: 100%;">
+                    <canvas id="profitChart"></canvas>
+                </div>
+            </div>
+        </section>
 
         <!-- Main Content: Client List -->
         <main class="content-area">
@@ -224,6 +243,10 @@
                         <div class="input-group">
                             <label>Valor de Cuota</label>
                             <div class="read-only-input" id="calc-cuota">$0.00</div>
+                        </div>
+                        <div class="input-group" style="grid-column: span 2;">
+                            <label style="color:var(--success-green);"><i class="fas fa-chart-line"></i> Ganancia Proyectada</label>
+                            <div class="read-only-input" id="calc-ganancia" style="color:var(--success-green); border-color:rgba(46,204,113,0.3); background:rgba(46,204,113,0.1);">S/ 0.00</div>
                         </div>
                     </div>
                 </div>
@@ -381,6 +404,40 @@
         </div>
     </div>
 
+    <!-- Modal for Calculator -->
+    <div id="modal-calculator" class="modal">
+        <div class="modal-content glass small-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-calculator gold"></i> Simulador Rápido</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="form-section">
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="calc-sim-amount">Monto Principal</label>
+                        <input type="number" id="calc-sim-amount" step="0.01" value="1000">
+                    </div>
+                    <div class="input-group">
+                        <label for="calc-sim-interest">Tasa de Interés (%)</label>
+                        <input type="number" id="calc-sim-interest" step="0.1" value="10">
+                    </div>
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label for="calc-sim-days">Plazo a simular (Días)</label>
+                        <input type="number" id="calc-sim-days" value="30">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 20px; background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 12px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Ganancia Proyectada</div>
+                    <div id="calc-sim-result" style="font-size: 2rem; color: var(--success-green); font-weight: 800; font-family: var(--font-heading);">S/ 0.00</div>
+                    <div id="calc-sim-daily" style="font-size: 0.8rem; color: var(--gold-primary); margin-top: 10px;">Interés diario: S/ 0.00 /día</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
