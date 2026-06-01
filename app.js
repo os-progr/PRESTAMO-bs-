@@ -40,6 +40,7 @@ function mapClientFromDB(row) {
 
 function mapClientToDB(client) {
     const obj = { ...client };
+    obj.term = Math.max(1, Math.ceil(obj.term || 1));
     delete obj.payments;
     delete obj.evidences;
     delete obj.phone;
