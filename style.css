@@ -508,6 +508,36 @@ body {
     color: white;
 }
 
+/* Bulk Send Button */
+.btn-bulk-send {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 25px;
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.15), rgba(37, 211, 102, 0.05));
+    color: #25d366;
+    border: 1px solid rgba(37, 211, 102, 0.3);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-bulk-send:hover {
+    background: #25d366;
+    color: white;
+    border-color: #25d366;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(37, 211, 102, 0.4);
+}
+
+.btn-bulk-send i {
+    font-size: 1.1rem;
+}
+
 /* Modals */
 .modal {
     display: none;

@@ -1067,16 +1067,22 @@ function sendWhatsApp(id) {
     const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
     
     let cuotaSugerida = client.totalToReturn / (client.term || 1);
+    const totalCuotas = client.term || 1;
+    let cuotaActual = 0;
 
     if (isInterestOnly) {
         const interestPaid = client.interestPaidCount || 0;
-        const totalMonths = client.term || 1;
-        if (interestPaid >= totalMonths - 1) {
+        cuotaActual = interestPaid + 1;
+        if (interestPaid >= totalCuotas - 1) {
             cuotaSugerida = client.amount + monthlyInterest;
         } else {
             cuotaSugerida = monthlyInterest;
         }
+    } else {
+        const totalPaid = (client.payments || []).filter(p => p.paymentType !== 'amortizacion').length;
+        cuotaActual = totalPaid + 1;
     }
+    const cuotaInfo = `📌 Cuota *${Math.min(cuotaActual, totalCuotas)}* de *${totalCuotas}*`;
 
     const capitalizedName = client.name.split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -1094,6 +1100,7 @@ function sendWhatsApp(id) {
         message += `Hola *${capitalizedName}*, te saludamos de *QOAN Soluciones Financieras* 🤖.%0A%0A`;
         message += `Notamos que tienes una cuota pendiente del *${dueDate.toLocaleDateString()}*. Sabemos que a veces se nos pasa la fecha, así que te escribimos para recordártelo amablemente.%0A%0A`;
         message += `*Detalle de tu deuda:*%0A`;
+        message += `${cuotaInfo}%0A`;
         message += `🔸 Cuota atrasada: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
         message += `🔸 Mora generada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
         message += `*👉 TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
@@ -1104,6 +1111,7 @@ function sendWhatsApp(id) {
         message += `Estimado/a *${capitalizedName}*, nos comunicamos del área de cobranza de *QOAN*.%0A%0A`;
         message += `A la fecha no hemos registrado tu pago del *${dueDate.toLocaleDateString()}*. El interés moratorio sigue incrementándose diariamente por el atraso de *${diffDays} días*.%0A%0A`;
         message += `*Estado de tu cuenta:*%0A`;
+        message += `${cuotaInfo}%0A`;
         message += `🔺 Cuota atrasada: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
         message += `🔺 Mora acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
         message += `*👉 TOTAL A PAGAR HOY: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
@@ -1114,6 +1122,7 @@ function sendWhatsApp(id) {
         message += `Atención *${capitalizedName}*, este es un mensaje urgente.%0A%0A`;
         message += `Tu cuenta presenta un *atraso grave de ${diffDays} días*. Si no recibimos el pago inmediato de tu deuda, nos veremos en la obligación de tomar medidas restrictivas e iniciar otro tipo de gestiones de cobro.%0A%0A`;
         message += `*Monto Exigible:*%0A`;
+        message += `${cuotaInfo}%0A`;
         message += `🔴 Cuota Vencida: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
         message += `🔴 Mora Acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
         message += `*👉 TOTAL EXIGIBLE HOY: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
@@ -1127,6 +1136,7 @@ function sendWhatsApp(id) {
         } else {
             message += `🔹 Concepto: *Cuota Regular*%0A`;
         }
+        message += `${cuotaInfo}%0A`;
         message += `🔹 Monto: *${state.config.currency} ${cuotaSugerida.toFixed(2)}*%0A`;
         if (mora > 0) message += `🔹 Mora: ${state.config.currency} ${mora.toFixed(2)}%0A`;
         message += `*👉 TOTAL A CANCELAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A`;
@@ -1144,6 +1154,82 @@ function sendWhatsApp(id) {
     message += `_Envíenos su comprobante para registrar su pago en el sistema. ¡Gracias!_`;
 
     window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
+}
+
+function sendPaymentConfirmation(client, amountPaid, newBalance, paymentType) {
+    if (!client.phone) return;
+
+    const capitalizedName = client.name.split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+
+    const dateStr = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
+    const timeStr = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+    const typeLabelMap = {
+        'interes': 'Interés Mensual',
+        'amortizacion': 'Abono a Capital',
+        'final': 'Pago Final — Préstamo Completado 🎉',
+        'abono': 'Abono a Cuota'
+    };
+    const typeLabel = typeLabelMap[paymentType] || 'Pago';
+
+    let message = `✅ *COMPROBANTE DE PAGO | QOAN* ✅%0A%0A`;
+    message += `Hola *${capitalizedName}*, tu pago ha sido registrado exitosamente.%0A%0A`;
+    message += `*📋 Detalle de la operación:*%0A`;
+    message += `🔹 Concepto: *${typeLabel}*%0A`;
+    message += `🔹 Monto pagado: *${state.config.currency} ${amountPaid.toFixed(2)}*%0A`;
+    message += `🔹 Fecha: ${dateStr} a las ${timeStr}%0A`;
+
+    if (paymentType === 'final' || newBalance <= 0) {
+        message += `%0A🎉 *¡FELICIDADES! Tu préstamo ha sido cancelado en su totalidad.* 🎉%0A`;
+        message += `_Gracias por tu confianza en QOAN. Si necesitas un nuevo préstamo en el futuro, no dudes en contactarnos. ¡Te esperamos!_%0A`;
+    } else {
+        message += `🔹 Saldo restante: *${state.config.currency} ${newBalance.toFixed(2)}*%0A`;
+        if (client.collectionDate) {
+            const nextDate = new Date(client.collectionDate).toLocaleDateString('es-PE', { day: '2-digit', month: 'long' });
+            message += `🔹 Próximo vencimiento: *${nextDate}*%0A`;
+        }
+        message += `%0A_¡Gracias por tu puntualidad! Sigue así. 💪_%0A`;
+    }
+
+    message += `%0A_— QOAN Soluciones Financieras —_`;
+
+    window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
+}
+
+function sendBulkReminders() {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const morosos = state.clients.filter(c => {
+        if (c.status === 'Pagado' || !c.phone) return false;
+        const mora = calculateMora(c);
+        if (mora > 0) return true;
+        // Include upcoming (next 4 days)
+        if (c.collectionDate) {
+            const dueDate = new Date(c.collectionDate);
+            const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 && diffDays <= 4;
+        }
+        return false;
+    });
+
+    if (morosos.length === 0) {
+        showToast('No hay clientes en mora o por vencer para notificar.', 'warning');
+        return;
+    }
+
+    showConfirm(`¿Enviar mensaje de cobranza a ${morosos.length} cliente(s) en mora o próximos a vencer?`, () => {
+        let sent = 0;
+        morosos.forEach((client, i) => {
+            setTimeout(() => {
+                sendWhatsApp(client.id);
+                sent++;
+                if (sent === morosos.length) {
+                    showToast(`Cobro masivo: ${sent} mensaje(s) abiertos ✓`, 'success');
+                }
+            }, i * 1500); // 1.5s delay between each to avoid browser blocking
+        });
+    });
 }
 
 function openMaps(location) {
@@ -1733,6 +1819,10 @@ function setupEventListeners() {
         };
         const typeLabel = typeLabelMap[paymentType] || 'Cobro';
         showToast(`${typeLabel} de ${state.config.currency} ${amountPaid.toFixed(2)} registrado ✓`, 'success');
+        // Send payment confirmation via WhatsApp
+        if (client.phone) {
+            setTimeout(() => sendPaymentConfirmation(client, amountPaid, client.remainingBalance, paymentType), 500);
+        }
         // Flash paid card
         setTimeout(() => {
             const card = elements.clientsContainer.querySelector(`[data-client-id="${client.id}"]`);
