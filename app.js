@@ -1091,55 +1091,57 @@ function sendWhatsApp(id) {
 
     if (mora > 0 && diffDays >= 1 && diffDays <= 2) {
         // Nivel 2: Aviso de Vencimiento
-        message += `*AVISO DE VENCIMIENTO | QOAN* 🤖%0A%0A`;
-        message += `Estimado/a *${capitalizedName}*. Nos comunicamos de QOAN Soluciones Financieras para informarle que su pago por *${state.config.currency} ${(cuotaSugerida).toFixed(2)}*, correspondiente a la fecha *${dueDate.toLocaleDateString()}*, se encuentra actualmente en estado pendiente.%0A%0A`;
-        message += `Le invitamos a regularizar su saldo a la brevedad para evitar recargos por mora mayores. (Mora actual generada: ${state.config.currency} ${mora.toFixed(2)}).%0A%0A`;
-        message += `*Total a pagar hoy: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
-        message += `_Quedamos atentos a su confirmación o comprobante de pago. ¡Que tenga un excelente día!_%0A%0A`;
+        message += `Hola *${capitalizedName}*, te saludamos de *QOAN Soluciones Financieras* 🤖.%0A%0A`;
+        message += `Notamos que tienes una cuota pendiente del *${dueDate.toLocaleDateString()}*. Sabemos que a veces se nos pasa la fecha, así que te escribimos para recordártelo amablemente.%0A%0A`;
+        message += `*Detalle de tu deuda:*%0A`;
+        message += `🔸 Cuota atrasada: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
+        message += `🔸 Mora generada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `*👉 TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Evita que la mora siga creciendo y regulariza tu pago hoy mismo._%0A%0A`;
     } else if (mora > 0 && diffDays >= 3 && diffDays <= 6) {
         // Nivel 3: Gestión de Cobro Firme
-        message += `*NOTIFICACIÓN DE COBRANZA | QOAN* ⚠️%0A%0A`;
-        message += `Hola, *${capitalizedName}*. Le notificamos desde el departamento de cobranza de QOAN.%0A%0A`;
-        message += `A la fecha, nuestro sistema sigue sin registrar el pago de su cuota del *${dueDate.toLocaleDateString()}*. Es importante regularizar esta situación hoy mismo para mantener el buen estado de su cuenta y evitar la acumulación diaria de intereses moratorios.%0A%0A`;
-        message += `*Detalle de la deuda:*%0A`;
-        message += `> Cuota pendiente: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
-        message += `> Mora acumulada (${diffDays} días): ${state.config.currency} ${mora.toFixed(2)}%0A`;
-        message += `> *TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
-        message += `_Por favor, comuníquese con nosotros a la brevedad para confirmar su pago._%0A%0A`;
+        message += `*⚠️ NOTIFICACIÓN DE ATRASO | QOAN*%0A%0A`;
+        message += `Estimado/a *${capitalizedName}*, nos comunicamos del área de cobranza de *QOAN*.%0A%0A`;
+        message += `A la fecha no hemos registrado tu pago del *${dueDate.toLocaleDateString()}*. El interés moratorio sigue incrementándose diariamente por el atraso de *${diffDays} días*.%0A%0A`;
+        message += `*Estado de tu cuenta:*%0A`;
+        message += `🔺 Cuota atrasada: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
+        message += `🔺 Mora acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `*👉 TOTAL A PAGAR HOY: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Por favor, envíanos el comprobante de pago a la brevedad o indícanos si tuviste algún inconveniente._%0A%0A`;
     } else if (mora > 0 && diffDays >= 7) {
         // Nivel 4: Último Aviso antes de Escalamiento
-        message += `*🚨 IMPORTANTE: AVISO DE ATRASO CRÍTICO | QOAN*%0A%0A`;
-        message += `Atención *${capitalizedName}*. Este es un aviso automático del sistema de QOAN Soluciones Financieras.%0A%0A`;
-        message += `Su cuenta presenta un atraso significativo desde el *${dueDate.toLocaleDateString()}*. Para evitar la suspensión de servicios financieros o el escalamiento de su caso a instancias superiores, requerimos el pago inmediato del saldo pendiente.%0A%0A`;
-        message += `*Monto Exigible Hoy:*%0A`;
-        message += `> Cuota Vencida: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
-        message += `> Intereses Moratorios: ${state.config.currency} ${mora.toFixed(2)}%0A`;
-        message += `> *TOTAL EXIGIBLE: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
-        message += `_Por favor, póngase en contacto directo con su asesor dentro de las próximas 24 horas para evitar mayores inconvenientes._%0A%0A`;
+        message += `*🚨 AVISO CRÍTICO DE COBRANZA | QOAN*%0A%0A`;
+        message += `Atención *${capitalizedName}*, este es un mensaje urgente.%0A%0A`;
+        message += `Tu cuenta presenta un *atraso grave de ${diffDays} días*. Si no recibimos el pago inmediato de tu deuda, nos veremos en la obligación de tomar medidas restrictivas e iniciar otro tipo de gestiones de cobro.%0A%0A`;
+        message += `*Monto Exigible:*%0A`;
+        message += `🔴 Cuota Vencida: ${state.config.currency} ${cuotaSugerida.toFixed(2)}%0A`;
+        message += `🔴 Mora Acumulada: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `*👉 TOTAL EXIGIBLE HOY: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A%0A`;
+        message += `_Tienes 24 horas para comunicarte con nosotros y darle solución a este atraso._%0A%0A`;
     } else {
         // Nivel 0 o por Defecto: Estado de Cuenta Normal
-        message += `*--- ESTADO DE CUENTA | QOAN ---*%0A%0A`;
-        message += `Hola *${capitalizedName}*, te enviamos tu estado de cuenta actualizado:%0A%0A`;
-        message += `*COBRO ACTUAL:*%0A`;
+        message += `Hola *${capitalizedName}* 👋, te saludamos de *QOAN Soluciones Financieras*.%0A%0A`;
+        message += `Te compartimos el estado de tu cuenta:%0A%0A`;
         if (isInterestOnly) {
-            message += `> Concepto: *Interés Mensual*%0A`;
+            message += `🔹 Concepto: *Interés Mensual*%0A`;
+        } else {
+            message += `🔹 Concepto: *Cuota Regular*%0A`;
         }
-        message += `> Monto: *${state.config.currency} ${cuotaSugerida.toFixed(2)}*%0A`;
-        if (mora > 0) message += `> Mora: ${state.config.currency} ${mora.toFixed(2)}%0A`;
-        message += `> *TOTAL A PAGAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A`;
-        if (client.collectionDate) message += `> Vencimiento: ${dueDate.toLocaleDateString()}%0A`;
+        message += `🔹 Monto: *${state.config.currency} ${cuotaSugerida.toFixed(2)}*%0A`;
+        if (mora > 0) message += `🔹 Mora: ${state.config.currency} ${mora.toFixed(2)}%0A`;
+        message += `*👉 TOTAL A CANCELAR: ${state.config.currency} ${(cuotaSugerida + mora).toFixed(2)}*%0A`;
+        if (client.collectionDate) message += `📅 Fecha de Vencimiento: *${dueDate.toLocaleDateString()}*%0A`;
         message += `%0A`;
     }
 
     if (client.maps) {
-        message += `*Ubicación de Cobro:*%0A`;
-        message += `📍 ${client.maps}%0A%0A`;
+        message += `📍 *Ubicación de cobro:* ${client.maps}%0A%0A`;
     }
 
-    message += `*PAGO VIA YAPE:*%0A`;
-    message += `Cel: *${state.config.yapePhone || '900 779 111'}*%0A`;
-    message += `A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*%0A%0A`;
-    message += `_Por favor, envía tu comprobante para registrar tu pago en el sistema. ¡Gracias!_`;
+    message += `*💳 MÉTODOS DE PAGO (YAPE)*%0A`;
+    message += `📲 Celular: *${state.config.yapePhone || '900 779 111'}*%0A`;
+    message += `👤 A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*%0A%0A`;
+    message += `_Envíenos su comprobante para registrar su pago en el sistema. ¡Gracias!_`;
 
     window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
 }
@@ -1471,14 +1473,13 @@ function sendWhatsAppReminder(id) {
 
     const dateStr = new Date(client.collectionDate).toLocaleDateString('es-PE', { day: '2-digit', month: 'long' });
 
-    let message = `*QOAN Soluciones Financieras* 🤖%0A%0A`;
-    message += `Hola, *${capitalizedName}*. Le escribe el asistente virtual de QOAN.%0A%0A`;
-    message += `Solo queremos enviarle un cordial recordatorio preventivo de que su próxima fecha de pago está programada para el *${dateStr}*.%0A`;
-    message += `Su saldo correspondiente a cancelar es de *${state.config.currency} ${cuota.toFixed(2)}*.%0A%0A`;
-    message += `_Si ya realizó el pago, por favor omita este mensaje. ¡Estamos a su disposición para cualquier consulta!_%0A%0A`;
-    message += `*PAGO VIA YAPE:*%0A`;
-    message += `Cel: *${state.config.yapePhone || '900 779 111'}*%0A`;
-    message += `A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*`;
+    let message = `Hola *${capitalizedName}* 👋, te escribe el asistente virtual de *QOAN Soluciones Financieras* 🤖.%0A%0A`;
+    message += `Solo queremos enviarte un recordatorio preventivo para ayudarte a mantener tus finanzas al día. Tu próxima fecha de pago es este *${dateStr}*.%0A%0A`;
+    message += `*👉 Monto a cancelar: ${state.config.currency} ${cuota.toFixed(2)}*%0A%0A`;
+    message += `_Si ya realizaste el depósito, por favor omite este mensaje. ¡Gracias por tu puntualidad!_%0A%0A`;
+    message += `*💳 MÉTODOS DE PAGO (YAPE)*%0A`;
+    message += `📲 Celular: *${state.config.yapePhone || '900 779 111'}*%0A`;
+    message += `👤 A nombre de: *${state.config.yapeName || 'Juan David Puclla Quispe'}*`;
 
     window.open(`https://wa.me/${client.phone}?text=${message}`, '_blank');
 }
