@@ -96,7 +96,6 @@ const elements = {
     searchInput: document.getElementById('client-search'),
     loanAmount: document.getElementById('loan-amount'),
     loanInterest: document.getElementById('loan-interest'),
-    loanTerm: document.getElementById('loan-term'),
     calcTotal: document.getElementById('calc-total'),
     calcCuota: document.getElementById('calc-cuota'),
     loanStartDate: document.getElementById('loan-start-date'),
@@ -625,22 +624,21 @@ function updateStats() {
 function calculateLoanPreview() {
     const amount = parseFloat(elements.loanAmount.value) || 0;
     const interest = parseFloat(elements.loanInterest.value) || 0;
-    const term = parseInt(elements.loanTerm.value) || 1;
     const type = document.getElementById('loan-type').value;
 
-    const totalInterest = Math.round((amount * (interest / 100) * term) * 100) / 100;
-    const totalReturn = Math.round((amount + totalInterest) * 100) / 100;
+    const startDateVal = document.getElementById('loan-start-date').value;
+    const collectionDateVal = document.getElementById('loan-collection-date').value;
+    let days = 30;
+    if (startDateVal && collectionDateVal) {
+        days = Math.max(1, Math.ceil((new Date(collectionDateVal) - new Date(startDateVal)) / (1000 * 60 * 60 * 24)));
+    }
+    
     const monthlyInterest = Math.round((amount * (interest / 100)) * 100) / 100;
     const dailyInterest = Math.round((monthlyInterest / 30) * 100) / 100;
+    const totalInterest = Math.round((dailyInterest * days) * 100) / 100;
+    const totalReturn = Math.round((amount + totalInterest) * 100) / 100;
     
-    let previewText = "";
-    if (type === 'interes' && term > 1) {
-        const finalPayment = Math.round((amount + monthlyInterest) * 100) / 100;
-        previewText = `${term - 1} cuotas de ${state.config.currency}${monthlyInterest.toFixed(2)} + 1 cuota final de ${state.config.currency}${finalPayment.toFixed(2)}`;
-    } else {
-        const cuota = Math.round((totalReturn / term) * 100) / 100;
-        previewText = `${term} cuotas de ${state.config.currency}${cuota.toFixed(2)}`;
-    }
+    let previewText = `1 pago de ${state.config.currency}${totalReturn.toFixed(2)} (en ${days} días)`;
 
     elements.calcTotal.innerHTML = `<span style="color:var(--gold-primary); font-weight:bold;">${state.config.currency} ${totalReturn.toFixed(2)}</span>`;
     elements.calcCuota.textContent = previewText;
@@ -648,45 +646,6 @@ function calculateLoanPreview() {
     const calcGanancia = document.getElementById('calc-ganancia');
     if (calcGanancia) {
         calcGanancia.innerHTML = `<span style="font-weight:bold;">${state.config.currency} ${totalInterest.toFixed(2)}</span>`;
-    }
-
-    // Daily interest breakdown panel
-    let dailyPanel = document.getElementById('daily-interest-panel');
-    if (!dailyPanel) {
-        dailyPanel = document.createElement('div');
-        dailyPanel.id = 'daily-interest-panel';
-        const calcCuotaParent = elements.calcCuota.closest('.input-group');
-        if (calcCuotaParent && calcCuotaParent.parentNode) {
-            calcCuotaParent.parentNode.appendChild(dailyPanel);
-        }
-    }
-    if (amount > 0 && interest > 0) {
-        dailyPanel.style.display = 'block';
-        dailyPanel.style.gridColumn = 'span 2';
-        dailyPanel.innerHTML = `
-            <div style="background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);border-radius:12px;padding:14px 16px;margin-top:6px;animation:revealCard 0.3s ease-out;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                    <i class="fas fa-clock" style="color:var(--gold-primary);font-size:0.8rem;"></i>
-                    <span style="font-size:0.65rem;color:var(--gold-primary);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;">Desglose de Interés</span>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
-                    <div style="background:rgba(255,255,255,0.03);padding:10px 8px;border-radius:10px;">
-                        <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Por Mes</div>
-                        <div style="font-size:1.1rem;color:#fff;font-weight:800;">${state.config.currency} ${monthlyInterest.toFixed(2)}</div>
-                    </div>
-                    <div style="background:rgba(212,175,55,0.08);padding:10px 8px;border-radius:10px;border:1px solid rgba(212,175,55,0.15);">
-                        <div style="font-size:0.6rem;color:var(--gold-primary);text-transform:uppercase;margin-bottom:4px;font-weight:700;">Por Día</div>
-                        <div style="font-size:1.1rem;color:var(--gold-primary);font-weight:800;">${state.config.currency} ${dailyInterest.toFixed(2)}</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);padding:10px 8px;border-radius:10px;">
-                        <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Total ${term}m</div>
-                        <div style="font-size:1.1rem;color:#fff;font-weight:800;">${state.config.currency} ${totalInterest.toFixed(2)}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        dailyPanel.style.display = 'none';
     }
 }
 
@@ -1149,6 +1108,7 @@ function generateReceipt(client, amountPaid, newBalance, nextDueDate, paymentTyp
 
     // Amount Section (Large and prominent)
     ctx.strokeStyle = "rgba(212, 175, 55, 0.3)";
+    ctx.lineWidth = 1;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
     ctx.moveTo(80, currentY - 20);
@@ -1227,23 +1187,12 @@ function sendWhatsApp(id) {
     const isInterestOnly = client.loanType === 'interes';
     const monthlyInterest = isInterestOnly ? Math.round((client.amount * (client.interest / 100)) * 100) / 100 : 0;
     
-    let cuotaSugerida = client.totalToReturn / (client.term || 1);
-    const totalCuotas = client.term || 1;
-    let cuotaActual = 0;
+    let cuotaSugerida = client.totalToReturn;
 
     if (isInterestOnly) {
-        const interestPaid = client.interestPaidCount || 0;
-        cuotaActual = interestPaid + 1;
-        if (interestPaid >= totalCuotas - 1) {
-            cuotaSugerida = client.amount + monthlyInterest;
-        } else {
-            cuotaSugerida = monthlyInterest;
-        }
-    } else {
-        const totalPaid = (client.payments || []).filter(p => p.paymentType !== 'amortizacion').length;
-        cuotaActual = totalPaid + 1;
+        cuotaSugerida = monthlyInterest;
     }
-    const cuotaInfo = `📌 Cuota *${Math.min(cuotaActual, totalCuotas)}* de *${totalCuotas}*`;
+    const cuotaInfo = `📌 Préstamo a plazo único`;
 
     const capitalizedName = client.name.split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -1454,7 +1403,6 @@ function openEditModal(id) {
     document.getElementById('client-rating').value = client.rating || 3;
     document.getElementById('loan-amount').value = client.amount;
     document.getElementById('loan-interest').value = client.interest;
-    document.getElementById('loan-term').value = client.term;
     document.getElementById('loan-type').value = client.loanType || 'fijo';
     document.getElementById('loan-start-date').value = client.startDate ? client.startDate.split('T')[0] : '';
     document.getElementById('loan-collection-date').value = client.collectionDate ? client.collectionDate.split('T')[0] : '';
@@ -1701,23 +1649,6 @@ function deletePayment(clientId, paymentIndex) {
     });
 }
 
-function exportCSV() {
-    let csv = "ID,Nombre,DNI,Telefono,Monto,Interes,Plazo,Saldo,Status,Fecha_Inicio,Fecha_Cobro,Calificacion\n";
-    state.clients.forEach(c => {
-        csv += `${c.id},${c.name},${c.dni},${c.phone},${c.amount},${c.interest},${c.term},${c.remainingBalance},${c.status},${c.startDate || ''},${c.collectionDate || ''},${c.rating || 3}\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.setAttribute('hidden', '');
-    a.setAttribute('href', url);
-    a.setAttribute('download', 'QOAN_Backup_Excel.csv');
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
 function exportJSON() {
     const data = {
         clients: state.clients,
@@ -1787,6 +1718,7 @@ function setupEventListeners() {
         document.getElementById('edit-client-id').value = "";
         elements.previewThumbnails.innerHTML = "";
         elements.modalLoan.style.display = "flex";
+        calculateLoanPreview();
     };
     
     // Global Close Logic (Delegation)
@@ -1831,8 +1763,9 @@ function setupEventListeners() {
     }
 
     // Form Calculations
-    [elements.loanAmount, elements.loanInterest, elements.loanTerm].forEach(input => {
+    [elements.loanAmount, elements.loanInterest, elements.loanStartDate, elements.loanCollectionDate].forEach(input => {
         input.oninput = calculateLoanPreview;
+        input.onchange = calculateLoanPreview;
     });
     document.getElementById('loan-type').onchange = calculateLoanPreview;
 
@@ -1873,15 +1806,22 @@ function setupEventListeners() {
 
         const amount = parseFloat(elements.loanAmount.value);
         const interest = parseFloat(elements.loanInterest.value);
-        const term = parseInt(elements.loanTerm.value) || 1;
+        
+        const startDateVal = document.getElementById('loan-start-date').value;
+        const collectionDateVal = document.getElementById('loan-collection-date').value;
+        let days = 30;
+        if (startDateVal && collectionDateVal) {
+            days = Math.max(1, Math.ceil((new Date(collectionDateVal) - new Date(startDateVal)) / (1000 * 60 * 60 * 24)));
+        }
+        const term = days / 30;
         
         // --- Validation ---
         if (amount <= 0) {
             alert("El monto principal debe ser mayor a 0.");
             return;
         }
-        if (term <= 0) {
-            alert("El plazo debe ser de al menos 1 mes.");
+        if (days <= 0) {
+            alert("La fecha de cobro debe ser posterior a la fecha de inicio.");
             return;
         }
         if (files.length > 3) {
@@ -1889,7 +1829,10 @@ function setupEventListeners() {
             return;
         }
 
-        const totalToReturn = Math.round((amount + (amount * (interest / 100) * term)) * 100) / 100;
+        const monthlyInterest = Math.round((amount * (interest / 100)) * 100) / 100;
+        const dailyInterest = Math.round((monthlyInterest / 30) * 100) / 100;
+        const totalInterest = Math.round((dailyInterest * days) * 100) / 100;
+        const totalToReturn = Math.round((amount + totalInterest) * 100) / 100;
 
         if (editId) {
             // Update existing
