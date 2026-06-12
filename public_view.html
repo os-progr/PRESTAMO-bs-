@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartera de Clientes - QOAN Financial</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { padding: 0; margin: 0; display: block; }
+        .public-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .public-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border-subtle); }
+        .logo-box { display: flex; align-items: center; gap: 12px; }
+        .logo-box i { font-size: 32px; color: var(--primary); }
+        .logo-box h1 { font-size: 24px; margin: 0; }
+        .table-container { background: rgba(15, 21, 36, 0.4); border-radius: 12px; border: 1px solid var(--border-subtle); padding: 16px; overflow-x: auto; }
+        .loader { text-align: center; padding: 48px; color: var(--text-muted); }
+        @media (max-width: 768px) {
+            .public-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+        }
+    </style>
+</head>
+<body class="dark-theme">
+    <div class="public-container">
+        <header class="public-header">
+            <div class="logo-box">
+                <i class="ph ph-bank"></i>
+                <div>
+                    <h1>QOAN Financial</h1>
+                    <span style="font-size: 12px; color: var(--text-secondary); letter-spacing: 1px;">CARTERA PÚBLICA</span>
+                </div>
+            </div>
+            <div>
+                <button class="icon-btn" onclick="toggleTheme()" title="Cambiar Tema"><i class="ph ph-moon" id="theme-icon"></i></button>
+            </div>
+        </header>
+
+        <div id="loader" class="loader">
+            <i class="ph ph-spinner ph-spin" style="font-size: 32px; margin-bottom: 16px;"></i>
+            <p>Cargando información de cartera...</p>
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="table-container">
+                <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary);">
+                            <th style="padding: 12px;">Cliente</th>
+                            <th style="padding: 12px;">Monto Original</th>
+                            <th style="padding: 12px;">Fecha de Registro</th>
+                            <th style="padding: 12px;">Plazo</th>
+                            <th style="padding: 12px;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="public-table-body">
+                        <!-- JS Will Render Here -->
+                    </tbody>
+                </table>
+            </div>
+            <p style="text-align: center; margin-top: 24px; font-size: 12px; color: var(--text-muted);">
+                La información mostrada se actualiza en tiempo real.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Config
+        const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR';
+        let supabase = null;
+        
+        try {
+            if (window.supabase) {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            } else {
+                console.error("Supabase script no cargó correctamente.");
+            }
+        } catch(e) {
+            console.error("Error al inicializar Supabase:", e);
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        }
+
+        function getStatusBadge(status) {
+            if(status === 'Al Día' || status === 'Pendiente') return '<span style="background: rgba(34, 197, 94, 0.1); color: #22c55e; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Vigente / Al Día</span>';
+            if(status === 'En Mora') return '<span style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">En Mora</span>';
+            if(status === 'Liquidado' || status === 'Pagado') return '<span style="background: rgba(34, 197, 94, 0.1); color: #22c55e; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">Liquidado</span>';
+            return `<span style="background: rgba(255, 255, 255, 0.1); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${status}</span>`;
+        }
+
+        async function loadPublicClients() {
+            try {
+                console.log("Iniciando carga de Supabase...");
+                // Descargamos los clientes
+                const { data, error } = await supabase.from('clients').select('*');
+                if (error) {
+                    console.error("Supabase Error:", error);
+                    throw error;
+                }
+                
+                console.log("Total clientes descargados:", data ? data.length : 0);
+
+                // Filtramos SOLO los que tienen [PUBLIC] en el campo notes
+                const publicClients = data.filter(c => (c.notes || '').includes('[PUBLIC]'));
+                console.log("Clientes públicos filtrados:", publicClients.length);
+
+                renderTable(publicClients);
+            } catch (e) {
+                console.error("Error al cargar clientes", e);
+                document.getElementById('loader').innerHTML = '<p style="color: #ef4444;">Error de conexión: ' + (e.message || 'Error desconocido') + '</p>';
+            }
+        }
+
+        function renderTable(clients) {
+            const tbody = document.getElementById('public-table-body');
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+
+            if (clients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--text-muted);">No hay clientes visibles públicamente.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = clients.map(c => {
+                const isLiquidado = (c.status === 'Pagado' || parseFloat(c.remainingBalance || 1) <= 0);
+                const finalStatus = isLiquidado ? 'Liquidado' : (c.status === 'Pendiente' ? 'Al Día' : (c.status || 'Al Día'));
+                
+                let dateDisplay = '-';
+                if (c.startDate || c.date) {
+                    try {
+                        const d = new Date(c.startDate || c.date);
+                        dateDisplay = d.toISOString().split('T')[0];
+                    } catch(e) {
+                        dateDisplay = c.startDate || c.date;
+                    }
+                }
+
+                return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 16px 12px; font-weight: 500;">${c.name}</td>
+                    <td style="padding: 16px 12px;">${formatCurrency(c.amount || 0)}</td>
+                    <td style="padding: 16px 12px;">${dateDisplay}</td>
+                    <td style="padding: 16px 12px;">${c.term || 1} Mes(es)</td>
+                    <td style="padding: 16px 12px;">${getStatusBadge(finalStatus)}</td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        // Theme logic
+        function toggleTheme() {
+            const isLight = document.body.classList.toggle('light-theme');
+            localStorage.setItem('qoan_theme', isLight ? 'light' : 'dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = isLight ? 'ph ph-sun' : 'ph ph-moon';
+        }
+
+        function init() {
+            if (localStorage.getItem('qoan_theme') === 'light') {
+                document.body.classList.add('light-theme');
+                const icon = document.getElementById('theme-icon');
+                if (icon) icon.className = 'ph ph-sun';
+            }
+            loadPublicClients();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
