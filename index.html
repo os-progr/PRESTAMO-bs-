@@ -41,28 +41,71 @@
     </div>
 
     <script>
+        let attempts = parseInt(localStorage.getItem('qoan_admin_attempts') || '0');
+
+        function updateLockoutState() {
+            const lockTime = parseInt(localStorage.getItem('qoan_admin_lock') || '0');
+            if (lockTime > 0) {
+                const now = Date.now();
+                // Bloqueado por 15 minutos
+                if (now - lockTime < 15 * 60 * 1000) {
+                    const remainingMins = Math.ceil((15 * 60 * 1000 - (now - lockTime)) / 60000);
+                    document.getElementById('admin-password').disabled = true;
+                    const btn = document.querySelector('button[onclick="checkPassword()"]');
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                    const err = document.getElementById('login-error');
+                    err.style.display = 'block';
+                    err.innerHTML = `Acceso bloqueado por seguridad.<br>Intenta en ${remainingMins} minuto(s).`;
+                    return true;
+                } else {
+                    localStorage.removeItem('qoan_admin_lock');
+                    localStorage.removeItem('qoan_admin_attempts');
+                    attempts = 0;
+                }
+            }
+            return false;
+        }
+
         function checkPassword() {
+            if (updateLockoutState()) return;
+
             const pwd = document.getElementById('admin-password').value;
             if (pwd === 'alvincagon10') {
                 sessionStorage.setItem('qoan_admin_auth', 'true');
+                localStorage.removeItem('qoan_admin_attempts');
+                localStorage.removeItem('qoan_admin_lock');
                 document.getElementById('login-overlay').style.opacity = '0';
                 setTimeout(() => {
                     document.getElementById('login-overlay').style.display = 'none';
                 }, 300);
             } else {
+                attempts++;
+                localStorage.setItem('qoan_admin_attempts', attempts);
+                
                 const err = document.getElementById('login-error');
                 err.style.display = 'block';
-                const box = err.parentElement;
-                box.style.transform = 'translateX(10px)';
-                setTimeout(() => box.style.transform = 'translateX(-10px)', 50);
-                setTimeout(() => box.style.transform = 'translateX(10px)', 100);
-                setTimeout(() => box.style.transform = 'translateX(-10px)', 150);
-                setTimeout(() => box.style.transform = 'translateX(0)', 200);
+                
+                if (attempts >= 3) {
+                    localStorage.setItem('qoan_admin_lock', Date.now());
+                    updateLockoutState();
+                } else {
+                    err.textContent = `Contraseña incorrecta. Intento ${attempts} de 3.`;
+                    const box = err.parentElement;
+                    box.style.transform = 'translateX(10px)';
+                    setTimeout(() => box.style.transform = 'translateX(-10px)', 50);
+                    setTimeout(() => box.style.transform = 'translateX(10px)', 100);
+                    setTimeout(() => box.style.transform = 'translateX(-10px)', 150);
+                    setTimeout(() => box.style.transform = 'translateX(0)', 200);
+                }
             }
         }
 
         if (sessionStorage.getItem('qoan_admin_auth') === 'true') {
             document.getElementById('login-overlay').style.display = 'none';
+        } else {
+            updateLockoutState();
         }
     </script>
     <div class="app-container">
