@@ -73,7 +73,17 @@
         // Supabase Config
         const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let supabase = null;
+        
+        try {
+            if (window.supabase) {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            } else {
+                console.error("Supabase script no cargó correctamente.");
+            }
+        } catch(e) {
+            console.error("Error al inicializar Supabase:", e);
+        }
 
         function formatCurrency(amount) {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -153,14 +163,20 @@
             if (icon) icon.className = isLight ? 'ph ph-sun' : 'ph ph-moon';
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        function init() {
             if (localStorage.getItem('qoan_theme') === 'light') {
                 document.body.classList.add('light-theme');
                 const icon = document.getElementById('theme-icon');
                 if (icon) icon.className = 'ph ph-sun';
             }
             loadPublicClients();
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
