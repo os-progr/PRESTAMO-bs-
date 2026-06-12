@@ -752,6 +752,7 @@ function renderAllTables() {
     renderHistoryTable();
     renderAlerts();
     updateStats();
+    if (typeof renderAdminPublicTable === 'function') renderAdminPublicTable();
 }
 
 function getStatusBadge(status) {
@@ -767,6 +768,66 @@ function getStatusBadge(status) {
 function filterClients(list) {
     if (!searchQuery) return list;
     return list.filter(c => c.name.toLowerCase().includes(searchQuery) || c.id.toLowerCase().includes(searchQuery));
+}
+
+window.togglePublic = async function(clientId) {
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c) return;
+    
+    const isCurrentlyPublic = (c.notes || '').includes('[PUBLIC]');
+    let cleanNotes = (c.notes || '').replace('[PUBLIC]', '').trim();
+    
+    if (isCurrentlyPublic) {
+        c.notes = cleanNotes;
+    } else {
+        c.notes = cleanNotes + (cleanNotes ? ' ' : '') + '[PUBLIC]';
+    }
+    
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            await supabaseClient.from('clients').update({ notes: c.notes }).eq('id', c.id);
+        } catch(e) {
+            console.error('Error syncing public status', e);
+        }
+    }
+    saveClientsData();
+    renderAllTables();
+};
+
+function renderAdminPublicTable() {
+    const tbody = document.getElementById('table-admin-public-body');
+    if (!tbody) return;
+    
+    let list = getSortedList(clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Pagado'));
+    if (searchQuery) {
+        list = filterClients(list);
+    }
+    
+    tbody.innerHTML = list.map(c => {
+        const isPublic = (c.notes || '').includes('[PUBLIC]');
+        const inst = getCurrentInstallment(c);
+        
+        return `
+        <tr>
+            <td>
+                <div class="client-cell">
+                    <div class="avatar-sm">${c.initials}</div>
+                    <div><strong>${c.name}</strong><span class="id-text">${c.id}</span></div>
+                </div>
+            </td>
+            <td>${formatCurrency(c.amount)}</td>
+            <td>${inst ? inst.date : '-'}</td>
+            <td>${getStatusBadge(c.status)}</td>
+            <td style="text-align: center;">
+                <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                    <input type="checkbox" ${isPublic ? 'checked' : ''} onchange="togglePublic('${c.id}')" style="opacity: 0; width: 0; height: 0;">
+                    <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${isPublic ? 'var(--primary)' : 'rgba(255,255,255,0.1)'}; transition: .4s; border-radius: 24px; border: 1px solid rgba(255,255,255,0.2);">
+                        <span style="position: absolute; height: 18px; width: 18px; left: ${isPublic ? '22px' : '3px'}; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%;"></span>
+                    </span>
+                </label>
+            </td>
+        </tr>
+    `}).join('');
 }
 
 function getActionButtons(c) {
