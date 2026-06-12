@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QOAN Financial</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="modal.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons for the UI -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Html2Canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon"><i class="ph ph-bank"></i></div>
+                <div class="logo-text">
+                    <h1>QOAN Financial</h1>
+                    <span>INSTITUTIONAL ACCESS</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" id="nav-dashboard">
+                    <i class="ph ph-squares-four"></i> Dashboard
+                </a>
+
+                <a href="#" class="nav-item" id="nav-socios">
+                    <i class="ph ph-users"></i> Socios Activos
+                </a>
+                <a href="#" class="nav-item" id="nav-history">
+                    <i class="ph ph-clock-counter-clockwise"></i> Historial Pagos
+                </a>
+                <a href="#" class="nav-item" id="nav-config">
+                    <i class="ph ph-gear"></i> Configuración
+                </a>
+                <a href="#" class="nav-item" id="nav-resumen">
+                    <i class="ph ph-chart-pie-slice"></i> Resumen Operativo
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="#" class="nav-item small">
+                    <i class="ph ph-question"></i> Help Center
+                </a>
+                <a href="#" class="nav-item small">
+                    <i class="ph ph-shield-check"></i> Security
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="search-bar">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="search-input" placeholder="Buscar cartera, clientes o folios...">
+                </div>
+                
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="toggleTheme()" title="Cambiar Tema (Claro/Oscuro)"><i class="ph ph-moon" id="theme-icon"></i></button>
+                    <button class="icon-btn"><i class="ph ph-bell"></i></button>
+                    <button class="icon-btn" onclick="location.reload()"><i class="ph ph-arrows-clockwise"></i></button>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h2>Dashboard Principal</h2>
+                        <p class="subtitle">"Vista general de rendimiento y cartera."</p>
+                    </div>
+                </div>
+
+                <!-- Content Grid -->
+                <div class="content-grid">
+                    <div class="main-column">
+                        <!-- Table Area -->
+                        <div class="glass-card table-card">
+                            <div class="card-header">
+                                <div class="table-title">
+                                    <h3>Gestión de Cartera</h3>
+                                    <span class="badge" id="dashboard-active-count">0 ACTIVOS</span>
+                                </div>
+                                <div class="table-actions">
+                                    <button class="icon-btn"><i class="ph ph-faders"></i></button>
+                                    <button class="icon-btn"><i class="ph ph-magnifying-glass"></i></button>
+                                </div>
+                            </div>
+                            <div class="table-container" style="padding: 16px;">
+                                <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                                    <button class="btn-page" onclick="sortClients('name')">Ordenar por Nombre</button>
+                                    <button class="btn-page" onclick="sortClients('amount')">Ordenar por Capital</button>
+                                    <button class="btn-page" onclick="sortClients('endDate')">Ordenar por Corte</button>
+                                </div>
+                                <div id="table-dashboard-body" class="clients-grid">
+                                    <!-- JS Will Render Cards Here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="side-column">
+                        <!-- Socios Activos -->
+                        <div class="glass-card small-card">
+                            <div class="card-header split">
+                                <div>
+                                    <span class="stat-label">SOCIOS ACTIVOS</span>
+                                    <h3 class="large-num" id="socios-activos-count">0</h3>
+                                </div>
+                                <div class="icon-box">
+                                    <i class="ph ph-users-three"></i>
+                                </div>
+                            </div>
+                            <div class="avatar-group">
+                                <img src="https://ui-avatars.com/api/?name=A&background=0D111A&color=fff" class="avatar-sm">
+                                <img src="https://ui-avatars.com/api/?name=B&background=0D111A&color=fff" class="avatar-sm">
+                                <img src="https://ui-avatars.com/api/?name=C&background=0D111A&color=fff" class="avatar-sm">
+                                <div class="avatar-sm more">+139</div>
+                            </div>
+                        </div>
+
+                        <!-- Alertas Próximas -->
+                        <div class="glass-card alerts-card">
+                            <div class="card-header split">
+                                <h3>ALERTAS PRÓXIMAS</h3>
+                                <span class="badge danger">Urgente</span>
+                            </div>
+                            
+                            <div class="alerts-list" id="alerts-container">
+                                <!-- Alerts will be dynamically generated here -->
+                            </div>
+                            
+                            <button class="btn-text w-full mt-4">VER TODAS LAS ALERTAS</button>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- End Dashboard View -->
+
+            <!-- Socios Activos View -->
+            <div id="socios-view" class="page-content" style="display: none;">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <h2>Socios Activos</h2>
+                        <p class="subtitle">"Clientes en proceso de pago o con pagos atrasados."</p>
+                    </div>
+                    <div class="search-container">
+                        <i class="ph ph-magnifying-glass search-icon"></i>
+                        <input type="text" id="search-socios" class="search-input" placeholder="Buscar por nombre o DNI..." autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th onclick="sortClients('name')" style="cursor: pointer;">Socio / Cliente <i class="ph ph-caret-up-down"></i></th>
+                                <th onclick="sortClients('amount')" style="cursor: pointer;">Capital Invertido <i class="ph ph-caret-up-down"></i></th>
+                                <th onclick="sortClients('balance')" style="cursor: pointer;">Deuda Total <i class="ph ph-caret-up-down"></i></th>
+                                <th onclick="sortClients('endDate')" style="cursor: pointer;">Próximo Corte <i class="ph ph-caret-up-down"></i></th>
+                                <th>Cuota Esperada</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-socios-body">
+                            <!-- JS Will Render Here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Configuración View -->
+            <div id="config-view" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h2>Configuración</h2>
+                        <p class="subtitle">"Ajustes de intereses, penalizaciones y notificaciones."</p>
+                    </div>
+                </div>
+
+                <div class="glass-card table-card" style="max-width: 600px;">
+                    <form id="form-config">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:8px; font-size:12px; color:var(--text-secondary);">Cobro diario de interés (%)</label>
+                            <input type="number" id="config-interes" step="0.01" style="width:100%; padding:10px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:8px; font-size:12px; color:var(--text-secondary);">Penalidad Diaria / Mora Diaria (Monto Fijo S/.)</label>
+                            <input type="number" id="config-mora" step="0.01" style="width:100%; padding:10px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;">
+                        </div>
+                        <div style="margin-bottom: 20px; padding: 12px; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 8px;">
+                            <label style="display:flex; align-items:center; gap: 8px; font-size:13px; color:white; cursor:pointer;">
+                                <input type="checkbox" id="config-allow-edit-financials" style="width:16px; height:16px; accent-color: #ef4444;">
+                                <strong>Modo Administrador:</strong> Permitir edición manual de Interés y Mora en clientes.
+                            </label>
+                            <p style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; margin-left: 24px;">Activando esto podrás sobreescribir la mora y el interés al editar un cliente individual (ideal para descuentos o casos especiales).</p>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:8px; font-size:12px; color:var(--text-secondary);">Teléfono Remitente (Notificaciones WhatsApp/SMS)</label>
+                            <input type="text" id="config-telefono" style="width:100%; padding:10px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:8px; font-size:12px; color:var(--text-secondary);">Número para Pagos (Yape/Plin/Cuenta)</label>
+                            <input type="text" id="config-whatsapp-num" placeholder="900 779 111" style="width:100%; padding:10px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:8px; font-size:12px; color:var(--text-secondary);">Nombre del Titular de la Cuenta</label>
+                            <input type="text" id="config-whatsapp-name" placeholder="Juan David Puclla Quispe" style="width:100%; padding:10px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;">
+                        </div>
+                        <button type="submit" class="btn-primary w-full" style="margin-bottom: 20px;">Guardar Cambios</button>
+                    </form>
+
+                    <div style="margin-top: 30px; border-top: 1px solid var(--border-subtle); padding-top: 20px;">
+                        <h3><i class="ph ph-hard-drives"></i> Respaldo Automático</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">Elige una carpeta en tu PC donde el sistema guardará una copia de seguridad "qoan_backup.json" cada vez que hagas un cambio. ¡Tus datos estarán 100% seguros!</p>
+                        <button type="button" class="btn-secondary w-full" onclick="selectDirectory()">
+                            <i class="ph ph-folder-open"></i> Elegir Carpeta de Trabajo
+                        </button>
+                        <div id="dir-status" style="margin-top: 12px; font-size: 13px; color: var(--text-muted);">
+                            <span><i class="ph ph-folder-minus"></i> Ninguna carpeta vinculada.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumen Operativo View -->
+            <div id="resumen-view" class="page-content" style="display: none;">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <h2>Resumen Operativo</h2>
+                        <p class="subtitle">"Precisión gélida en la gestión de capital."</p>
+                    </div>
+                    <div class="header-buttons" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <div class="search-container">
+                            <i class="ph ph-magnifying-glass search-icon"></i>
+                            <input type="text" id="search-resumen" class="search-input" placeholder="Buscar socio..." autocomplete="off">
+                        </div>
+                        <input type="date" id="filter-start" style="padding:8px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;" title="Fecha Inicio">
+                        <span style="color:var(--text-secondary);">a</span>
+                        <input type="date" id="filter-end" style="padding:8px; background:rgba(15,21,36,0.6); border:1px solid var(--border-subtle); color:white; border-radius:8px;" title="Fecha Fin">
+                        <button class="btn-secondary" id="btn-filter-stats" style="padding: 8px 16px;" title="Aplicar Filtro">
+                            <i class="ph ph-funnel"></i>
+                        </button>
+                        <button class="btn-primary" id="btn-export">
+                            <i class="ph ph-download-simple"></i> Exportar CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="glass-card stat-card">
+                        <span class="stat-label">TOTAL A RECUPERAR</span>
+                        <h3 id="stat-recuperar">$2,842,500.00</h3>
+                        <div class="stat-trend positive">
+                            <i class="ph ph-trend-up"></i> +12.4% vs mes anterior
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <span class="stat-label">MORA POR COBRAR</span>
+                        <h3 id="stat-mora">$128,400.00</h3>
+                        <div class="stat-trend negative">
+                            <i class="ph ph-warning-circle"></i> 4.5% del portfolio total
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <span class="stat-label">INTERESES POR COBRAR</span>
+                        <h3 id="stat-intereses">$0.00</h3>
+                        <div class="stat-trend neutral">
+                            <i class="ph ph-money"></i> Proyección trimestral OK
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <span class="stat-label">CAPITAL INVERTIDO</span>
+                        <h3 id="stat-capital">$12,400,000</h3>
+                        <div class="stat-trend info">
+                            <i class="ph ph-shield-check"></i> Escalabilidad 92%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rendimiento Operativo Chart -->
+                <div class="glass-card chart-card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div>
+                            <h3>Rendimiento Operativo</h3>
+                            <span class="subtitle">Intereses cobrados vs Proyectados (Semestral)</span>
+                        </div>
+                    </div>
+                    <div class="chart-placeholder" style="height: 300px; padding: 0;">
+                        <canvas id="rendimientoChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Desglose de Cartera Activa Table -->
+                <div class="glass-card table-card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div class="table-title">
+                            <h3>Desglose de Cartera (Estado por Cliente)</h3>
+                        </div>
+                    </div>
+                    <div class="table-container" style="overflow-x: auto;">
+                        <table class="data-table" id="table-reporte-especial">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Cliente</th>
+                                    <th>DNI</th>
+                                    <th>Capital</th>
+                                    <th>Int.</th>
+                                    <th>F. Registro</th>
+                                    <th>Cuota Int.</th>
+                                    <th>F. Venc.</th>
+                                    <th>C.P.</th>
+                                    <th>Mora Acum.</th>
+                                    <th>Estado Actual</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-resumen-body">
+                                <!-- Data will be populated here -->
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" style="text-align: left; font-weight: bold;">TOTALES EN CARTERA</td>
+                                    <td id="tot-capital" style="font-weight: bold;"></td>
+                                    <td style="font-weight: bold; text-align: center;">-</td>
+                                    <td id="tot-cuotaint" style="font-weight: bold;"></td>
+                                    <td style="font-weight: bold; text-align: center;">-</td>
+                                    <td style="font-weight: bold; text-align: center;">-</td>
+                                    <td id="tot-mora" style="font-weight: bold;"></td>
+                                    <td style="font-weight: bold; text-align: center;">-</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View (Hidden by default) -->
+            <div id="history-view" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h2>Historial de Clientes</h2>
+                        <p class="subtitle">"Registro de cuentas canceladas exitosamente."</p>
+                    </div>
+                </div>
+
+                <div class="glass-card table-card">
+                    <div class="card-header">
+                        <div class="table-title">
+                            <h3>Cuentas Pagadas</h3>
+                            <span class="badge success">COMPLETADO</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th onclick="sortClients('name')" style="cursor: pointer;">Cliente <i class="ph ph-caret-up-down"></i></th>
+                                    <th onclick="sortClients('amount')" style="cursor: pointer;">Monto Original <i class="ph ph-caret-up-down"></i></th>
+                                    <th onclick="sortClients('endDate')" style="cursor: pointer;">Fecha de Liquidación <i class="ph ph-caret-up-down"></i></th>
+                                    <th>Estado Final</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-history-body">
+                                <!-- JS Will Render Here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Floating Action Button -->
+            <button class="fab" id="btn-add-client">
+                <i class="ph ph-plus"></i>
+            </button>
+        </main>
+    </div>
+
+    <!-- New Client Modal -->
+    <div id="modal-new-client" class="modal-overlay">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3>Nuevo Cliente</h3>
+                <button class="modal-close" id="btn-close-modal"><i class="ph ph-x"></i></button>
+            </div>
+            <form id="form-new-client">
+                <div class="form-group">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="client-name" placeholder="Ej. Juan Pérez" required>
+                </div>
+                <div class="form-group">
+                    <label>DNI / Identificación</label>
+                    <input type="text" id="client-dni" placeholder="Número de documento" required>
+                </div>
+                <div class="form-group">
+                    <label>Domicilio / Dirección</label>
+                    <input type="text" id="client-address" placeholder="Dirección completa del cliente" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label>Número de WhatsApp</label>
+                        <input type="tel" id="client-whatsapp" placeholder="+52 ..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono Adicional (Opcional)</label>
+                        <input type="tel" id="client-phone2" placeholder="Opcional">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label>Fecha de Inicio</label>
+                        <input type="date" id="client-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Plazo a Pagar (Meses)</label>
+                        <select id="client-duration" required style="width: 100%; padding: 10px; background: rgba(15, 21, 36, 0.6); border: 1px solid var(--border-subtle); color: white; border-radius: 8px;">
+                            <option value="1">1 Mes</option>
+                            <option value="2">2 Meses</option>
+                            <option value="3">3 Meses</option>
+                            <option value="4">4 Meses</option>
+                            <option value="5">5 Meses</option>
+                            <option value="6">6 Meses</option>
+                            <option value="12">12 Meses</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="admin-financials-container" style="display: none; grid-template-columns: 1fr 1fr; gap: 16px; padding: 12px; background: rgba(220, 38, 38, 0.05); border: 1px dashed rgba(220, 38, 38, 0.3); border-radius: 8px; margin-bottom: 16px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="color: #fca5a5;">% Interés Manual</label>
+                        <input type="number" id="client-interest" step="0.01" placeholder="Ej. 15">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="color: #fca5a5;">Mora Total Manual (S/)</label>
+                        <input type="number" id="client-custom-mora" step="0.01" placeholder="Ej. 50.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Monto del Préstamo Otorgado</label>
+                    <input type="number" id="client-amount" placeholder="$0.00" required>
+                </div>
+                <div class="form-group">
+                    <label>Notas Adicionales</label>
+                    <textarea id="client-notes" placeholder="Detalles, referencias o acuerdos con el cliente..."></textarea>
+                </div>
+                <button type="submit" class="btn-primary w-full" style="margin-top: 16px;">Guardar Cliente</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Payment Modal (Abonos) -->
+    <div id="modal-payment" class="modal-overlay">
+        <div class="modal-content glass-card" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Registrar Abono</h3>
+                <button class="modal-close" id="btn-close-payment-modal"><i class="ph ph-x"></i></button>
+            </div>
+            <form id="form-payment">
+                <input type="hidden" id="payment-client-id">
+                <div class="form-group">
+                    <label>Monto a Abonar</label>
+                    <input type="number" id="payment-amount" placeholder="$0.00" required step="0.01">
+                </div>
+                <button type="submit" class="btn-primary w-full" style="margin-top: 16px;">Registrar Pago</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Logic for switching interfaces -->
+    <script>
+        const navDashboard = document.getElementById('nav-dashboard');
+        const navHistory = document.getElementById('nav-history');
+        const navSocios = document.getElementById('nav-socios');
+        const navConfig = document.getElementById('nav-config');
+        const navResumen = document.getElementById('nav-resumen');
+
+        const viewDashboard = document.getElementById('dashboard-view');
+        const viewHistory = document.getElementById('history-view');
+        const viewSocios = document.getElementById('socios-view');
+        const viewConfig = document.getElementById('config-view');
+        const viewResumen = document.getElementById('resumen-view');
+
+        const allNavs = [navDashboard, navHistory, navSocios, navConfig, navResumen];
+        const allViews = [viewDashboard, viewHistory, viewSocios, viewConfig, viewResumen];
+
+        function switchView(activeNav, activeView) {
+            allNavs.forEach(nav => nav.classList.remove('active'));
+            allViews.forEach(view => view.style.display = 'none');
+
+            activeNav.classList.add('active');
+            activeView.style.display = 'block';
+        }
+
+        navDashboard.addEventListener('click', (e) => { e.preventDefault(); switchView(navDashboard, viewDashboard); });
+        navHistory.addEventListener('click', (e) => { e.preventDefault(); switchView(navHistory, viewHistory); });
+        navSocios.addEventListener('click', (e) => { e.preventDefault(); switchView(navSocios, viewSocios); });
+        navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView(navConfig, viewConfig); });
+        navResumen.addEventListener('click', (e) => { e.preventDefault(); switchView(navResumen, viewResumen); });
+
+        // Modal Logic
+        const fab = document.getElementById('btn-add-client');
+        const modal = document.getElementById('modal-new-client');
+        const closeModal = document.getElementById('btn-close-modal');
+
+        fab.addEventListener('click', () => {
+            if (window.openNewClientModal) {
+                window.openNewClientModal();
+            } else {
+                modal.style.display = 'flex';
+            }
+        });
+
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Close Modals
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+        
+        const modalPayment = document.getElementById('modal-payment');
+        const closePaymentModal = document.getElementById('btn-close-payment-modal');
+        closePaymentModal.addEventListener('click', () => {
+            modalPayment.style.display = 'none';
+        });
+        modalPayment.addEventListener('click', (e) => {
+            if (e.target === modalPayment) modalPayment.style.display = 'none';
+        });
+    </script>
+    <!-- Cronograma Modal -->
+    <div class="modal-overlay" id="modal-cronograma" style="display: none;">
+        <div class="modal-content glass-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="ph ph-calendar-dots"></i> Cronograma de Pagos</h3>
+                <button class="icon-btn" onclick="document.getElementById('modal-cronograma').style.display='none'"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <th style="padding: 10px;">Fecha</th>
+                            <th style="padding: 10px;">Concepto</th>
+                            <th style="padding: 10px;">Monto</th>
+                            <th style="padding: 10px;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cronograma-body">
+                        <!-- JS renders rows -->
+                    </tbody>
+                </table>
+                
+                <h4 style="margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;"><i class="ph ph-receipt"></i> Historial de Abonos (Tickets)</h4>
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary);">
+                            <th style="padding: 8px;">Fecha de Pago</th>
+                            <th style="padding: 8px;">Folio / Ticket</th>
+                            <th style="padding: 8px;">Monto Abonado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pagos-body">
+                        <!-- JS renders rows -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-text" onclick="document.getElementById('modal-cronograma').style.display='none'">CERRAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Template for Payment Ticket Generation -->
+    <div id="ticket-template" style="position: absolute; top: -9999px; left: -9999px; width: 320px; background: #ffffff; padding: 20px; box-sizing: border-box; font-family: 'Inter', sans-serif; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #e5e7eb;">
+        <div style="text-align: center; border-bottom: 2px dashed #d1d5db; padding-bottom: 15px; margin-bottom: 15px;">
+            <div style="font-size: 24px; font-weight: 800; color: #111827; letter-spacing: -0.5px;">QOAN<span style="color: #2563eb;">Financial</span></div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Comprobante de Abono</div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; margin-bottom: 8px;">
+            <span>Fecha:</span>
+            <span id="tkt-date" style="font-weight: 600; color: #111827;"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #4b5563; margin-bottom: 8px;">
+            <span>DNI:</span>
+            <span id="tkt-id" style="font-weight: 600; color: #111827;"></span>
+        </div>
+        
+        <div style="margin-top: 20px; background: #f3f4f6; padding: 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Cliente</div>
+            <div id="tkt-client" style="font-size: 14px; font-weight: 700; color: #111827; margin-top: 2px;"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 14px; color: #4b5563;">MONTO PAGADO</span>
+                <span id="tkt-amount" style="font-size: 22px; font-weight: 800; color: #16a34a;"></span>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px; border-top: 2px dashed #d1d5db; padding-top: 15px; display: flex; justify-content: space-between; font-size: 12px;">
+            <div style="color: #4b5563;">Saldo Pendiente:</div>
+            <div id="tkt-balance" style="font-weight: 700; color: #ef4444;"></div>
+        </div>
+
+        <div style="margin-top: 25px; text-align: center; font-size: 11px; color: #6b7280; font-weight: 500;">
+            ¡Gracias por su puntualidad!
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

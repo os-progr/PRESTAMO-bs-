@@ -1,0 +1,1262 @@
+// --- Supabase Config ---
+const SUPABASE_URL = 'https://ryphrvuljryvwtvssnff.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_-wbllkasfqvfCL3E2tX4wA_6EVwctTR';
+let supabaseClient = null;
+if (window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// Data Storage Keys
+const CLIENTS_KEY = 'qoan_clients';
+const CONFIG_KEY = 'qoan_config';
+
+// Global Variables
+let rendimientoChartInstance = null;
+let clients = [];
+let clientsLoadedFromSupabase = false;
+let editingClientId = null;
+let currentPaymentClientId = null;
+let dirHandle = null;
+let currentSortKey = null;
+let sortAscending = true;
+let searchQuery = '';
+
+// IndexedDB para permisos de carpeta
+function openIDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('qoan_db', 1);
+        req.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore('settings');
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveHandle(handle) {
+    const db = await openIDB();
+    const tx = db.transaction('settings', 'readwrite');
+    tx.objectStore('settings').put(handle, 'dirHandle');
+    return new Promise(r => tx.oncomplete = r);
+}
+
+async function getHandle() {
+    const db = await openIDB();
+    const tx = db.transaction('settings', 'readonly');
+    const req = tx.objectStore('settings').get('dirHandle');
+    return new Promise(r => {
+        req.onsuccess = () => r(req.result);
+        req.onerror = () => r(null);
+    });
+}
+
+async function verifyPermission(fileHandle, readWrite) {
+    const options = {};
+    if (readWrite) {
+        options.mode = 'readwrite';
+    }
+    if ((await fileHandle.queryPermission(options)) === 'granted') {
+        return true;
+    }
+    if ((await fileHandle.requestPermission(options)) === 'granted') {
+        return true;
+    }
+    return false;
+}
+
+async function autoSave() {
+    if (!dirHandle) return;
+    try {
+        if (await verifyPermission(dirHandle, true)) {
+            const fileHandle = await dirHandle.getFileHandle('qoan_backup.json', { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(JSON.stringify({ config, clients }, null, 2));
+            await writable.close();
+            const statusEl = document.getElementById('dir-status');
+            if (statusEl) statusEl.innerHTML = `<span style="color: var(--success)"><i class="ph ph-check-circle"></i> Sincronizando en: ${dirHandle.name}</span>`;
+        }
+    } catch (e) {
+        console.error('Autosave failed', e);
+        const statusEl = document.getElementById('dir-status');
+        if (statusEl) statusEl.innerHTML = `<span style="color: var(--danger)"><i class="ph ph-warning-circle"></i> Error guardando. Necesita permiso.</span>`;
+    }
+}
+
+window.selectDirectory = async function() {
+    try {
+        dirHandle = await window.showDirectoryPicker();
+        await saveHandle(dirHandle);
+        await autoSave();
+        alert('Carpeta vinculada exitosamente. El sistema hará copias de seguridad automáticas aquí.');
+    } catch (e) {
+        console.error('User cancelled or error', e);
+    }
+}
+
+async function initFileAccess() {
+    dirHandle = await getHandle();
+    if (dirHandle) {
+        const statusEl = document.getElementById('dir-status');
+        if (statusEl) statusEl.innerHTML = `<span><i class="ph ph-folder"></i> Carpeta vinculada: ${dirHandle.name}.</span>`;
+    }
+}
+
+function saveClientsData() {
+    localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+    autoSave();
+}
+
+// Load initial config
+let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {
+    interesDiario: 2.5,
+    moraAdicional: 5.0,
+    telefonoRemitente: '',
+    whatsappNum: '900 779 111',
+    whatsappName: 'Juan David Puclla Quispe'
+};
+
+if (!config.whatsappNum) config.whatsappNum = '900 779 111';
+if (!config.whatsappName) config.whatsappName = 'Juan David Puclla Quispe';
+
+function mapSupabaseClientToApp(row) {
+    const duration = row.term || 1;
+    const date = row.startDate || row.date || new Date().toISOString().split('T')[0];
+    
+    // Función auxiliar para iniciales
+    function getInits(n) {
+        return (n||'').split(' ').map(x => x[0]).join('').substring(0, 2).toUpperCase();
+    }
+      const isLiquidado = (row.status === 'Pagado' || parseFloat(row.remainingBalance || 1) <= 0);
+    const finalStatus = isLiquidado ? 'Liquidado' : (row.status === 'Pendiente' ? 'Al Día' : (row.status || 'Al Día'));
+    
+    // Calculate monthly interest rate from row or fallback to config * 30
+    const monthlyRateStr = row.interest ? (row.interest / 100) : (config.interesDiario / 100) * 30;
+    
+    // Generar cuotas si no existen en la BD (para adaptación)
+    const installs = generateInstallments(date, parseFloat(row.amount || 0), duration, monthlyRateStr, true);
+    
+    // Si el cliente ya pagó todo en la BD antigua, marcamos todas sus cuotas como Pagadas
+    if (isLiquidado) {
+        installs.forEach(inst => {
+            inst.status = 'Pagado';
+            inst.paidAmount = inst.expectedInterest + (inst.isFinal ? parseFloat(row.amount || 0) : 0);
+        });
+    } else {
+        // Marcar cuotas como pagadas basado en interestPaidCount
+        const paidCount = parseInt(row.interestPaidCount || 0);
+        for(let i = 0; i < paidCount && i < installs.length; i++) {
+            installs[i].status = 'Pagado';
+            installs[i].paidAmount = installs[i].expectedInterest;
+        }
+    }
+
+    return {
+        id: row.id,
+        name: row.name || 'Sin Nombre',
+        initials: getInits(row.name),
+        dni: row.dni || '',
+        address: row.maps || '', 
+        whatsapp: row.phone || '',
+        phone2: '',
+        startDate: date,
+        endDate: getNextMonthDate(date, duration),
+        duration: duration,
+        amount: parseFloat(row.amount || 0),
+        balance: parseFloat(row.remainingBalance || 0),
+        notes: row.notes || '',
+        status: finalStatus,
+        lastPenaltyDate: null,
+        installments: installs,
+        payments: (row.payments || []).map(p => ({
+            id: p.id || ('PAY-' + Date.now().toString().slice(-6) + Math.floor(Math.random()*1000)),
+            amount: parseFloat(p.amount),
+            date: p.date,
+            paymentType: p.paymentType || 'abono'
+        }))
+    };
+}
+
+async function loadClientsFromSupabase() {
+    if (!supabaseClient) return;
+    try {
+        const { data: supaClients, error } = await supabaseClient.from('clients').select('*, payments(*)');
+        if (error) throw error;
+        
+        if (supaClients && supaClients.length > 0) {
+            clients = supaClients.map(mapSupabaseClientToApp);
+            clientsLoadedFromSupabase = true;
+            saveClientsData(); // Guardar copia local por si acaso
+            checkMoras();
+            renderAllTables();
+            renderChart();
+        }
+    } catch (e) {
+        console.error('Error cargando de Supabase:', e);
+    }
+}
+
+// Fallback load local clients if Supabase takes too long or fails
+let rawClients = JSON.parse(localStorage.getItem(CLIENTS_KEY)) || [];
+clients = rawClients.map(c => {
+    if (!c.installments) {
+        c.installments = [{
+            date: c.endDate,
+            expectedInterest: 0,
+            penalty: 0,
+            status: c.status === 'Liquidado' ? 'Pagado' : 'Pendiente',
+            isFinal: true,
+            paidAmount: c.status === 'Liquidado' ? c.balance : 0
+        }];
+        c.balance = c.amount; 
+    }
+    return c;
+});
+
+function getNextMonthDate(startDate, monthsToAdd) {
+    const date = new Date(startDate);
+    date.setMonth(date.getMonth() + parseInt(monthsToAdd));
+    return date.toISOString().split('T')[0];
+}
+
+function generateInstallments(startDate, amount, durationMonths, interestRate, isMonthlyRate = false) {
+    let installs = [];
+    const monthlyInterest = isMonthlyRate 
+        ? amount * interestRate 
+        : amount * (interestRate / 100) * 30;
+    
+    for (let i = 1; i <= durationMonths; i++) {
+        installs.push({
+            id: 'cuota-' + i,
+            date: getNextMonthDate(startDate, i),
+            expectedInterest: monthlyInterest,
+            penalty: 0,
+            status: 'Pendiente',
+            isFinal: (i == durationMonths),
+            paidAmount: 0
+        });
+    }
+    return installs;
+}
+
+function getCurrentInstallment(client) {
+    return client.installments.find(inst => inst.status !== 'Pagado');
+}
+
+function getInstallmentTotal(installment, capital) {
+    if (!installment) return 0;
+    return installment.expectedInterest + installment.penalty + (installment.isFinal ? capital : 0) - installment.paidAmount;
+}
+
+function checkMoras() {
+    let changed = false;
+    const today = new Date().toISOString().split('T')[0]; 
+    const todayTime = new Date(today).getTime();
+    
+    clients.forEach(c => {
+        if (c.status !== 'Liquidado') {
+            const currentInst = getCurrentInstallment(c);
+            if (!currentInst) {
+                c.status = 'Liquidado';
+                changed = true;
+                return;
+            }
+
+            if (currentInst.date < today && c.status !== 'En Mora') {
+                c.status = 'En Mora';
+                c.lastPenaltyDate = currentInst.date; // The penalty starts counting from the cutoff date
+                changed = true;
+            }
+
+            if (c.status === 'En Mora') {
+                if (c.customMora !== undefined) {
+                    currentInst.penalty = c.customMora;
+                    c.lastPenaltyDate = today;
+                    changed = true;
+                } else {
+                    if (!c.lastPenaltyDate) c.lastPenaltyDate = currentInst.date;
+                    
+                    const lastPenaltyTime = new Date(c.lastPenaltyDate).getTime();
+                    const diffTime = todayTime - lastPenaltyTime;
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays > 0) {
+                        for (let i = 0; i < diffDays; i++) {
+                            // Mora es ahora un monto fijo según contrato
+                            const penalty = config.moraAdicional;
+                            currentInst.penalty += penalty;
+                        }
+                        c.lastPenaltyDate = today;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    });
+    
+    if (changed) {
+        saveClientsData();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const confInteres = document.getElementById('config-interes');
+    const confMora = document.getElementById('config-mora');
+    const confTel = document.getElementById('config-telefono');
+    const confWaNum = document.getElementById('config-whatsapp-num');
+    const confWaName = document.getElementById('config-whatsapp-name');
+    const confAllowAdmin = document.getElementById('config-allow-edit-financials');
+    
+    if (confInteres) confInteres.value = config.interesDiario;
+    if (confMora) confMora.value = config.moraAdicional;
+    if (confTel) confTel.value = config.telefonoRemitente || '';
+    if (confWaNum) confWaNum.value = config.whatsappNum || '';
+    if (confWaName) confWaName.value = config.whatsappName || '';
+    if (confAllowAdmin) confAllowAdmin.checked = config.allowEditFinancials || false;
+    
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase();
+        renderAllTables();
+    });
+
+    const btnExport = document.getElementById('btn-export');
+    if (btnExport) btnExport.addEventListener('click', exportToCSV);
+    
+    const btnFilter = document.getElementById('btn-filter-stats');
+    if (btnFilter) btnFilter.addEventListener('click', updateStats);
+    
+    
+    checkMoras();
+    renderAllTables();
+    renderChart();
+    
+    initFileAccess();
+    
+    // Cargar de Supabase al iniciar
+    loadClientsFromSupabase();
+});
+
+document.getElementById('form-config').addEventListener('submit', (e) => {
+    e.preventDefault();
+    config = {
+        interesDiario: parseFloat(document.getElementById('config-interes').value),
+        moraAdicional: parseFloat(document.getElementById('config-mora').value),
+        telefonoRemitente: document.getElementById('config-telefono').value,
+        whatsappNum: document.getElementById('config-whatsapp-num').value,
+        whatsappName: document.getElementById('config-whatsapp-name').value,
+        allowEditFinancials: document.getElementById('config-allow-edit-financials').checked
+    };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    alert('Configuración guardada localmente.');
+    renderAllTables();
+    renderChart();
+});
+
+window.sortClients = function(key) {
+    if (currentSortKey === key) {
+        sortAscending = !sortAscending;
+    } else {
+        currentSortKey = key;
+        sortAscending = true;
+    }
+    renderAllTables();
+};
+
+function getSortedList(list) {
+    if (!currentSortKey) return list;
+    return [...list].sort((a, b) => {
+        let valA = a[currentSortKey];
+        let valB = b[currentSortKey];
+        
+        if (currentSortKey === 'endDate') {
+            const instA = getCurrentInstallment(a);
+            const instB = getCurrentInstallment(b);
+            valA = instA ? instA.date : '9999-99-99';
+            valB = instB ? instB.date : '9999-99-99';
+                    }
+        
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        
+        if (valA < valB) return sortAscending ? -1 : 1;
+        if (valA > valB) return sortAscending ? 1 : -1;
+        return 0;
+    });
+}
+
+function exportToCSV() {
+    if (clients.length === 0) {
+        alert("No hay datos para exportar.");
+        return;
+    }
+    const headers = ['ID', 'Nombre', 'DNI', 'WhatsApp', 'Fecha Inicio', 'Capital Original', 'Estado'];
+    const rows = clients.map(c => [
+        c.id, `"${c.name}"`, c.dni, c.whatsapp, c.startDate, c.amount, c.status
+    ]);
+    
+    let csvContent = headers.join(',') + '\n' + rows.map(e => e.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "qoan_reporte.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function generateId() {
+    return '#' + Math.floor(10000 + Math.random() * 90000) + '-' + String.fromCharCode(65 + Math.floor(Math.random() * 26));
+}
+
+function getInitials(name) {
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+}
+
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+}
+
+document.getElementById('form-new-client').addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('client-name').value;
+    const date = document.getElementById('client-date').value;
+    const duration = document.getElementById('client-duration').value;
+    const amount = parseFloat(document.getElementById('client-amount').value);
+    
+    if (editingClientId) {
+        const c = clients.find(cl => cl.id === editingClientId);
+        if (c) {
+            c.name = name;
+            c.initials = getInitials(name);
+            c.dni = document.getElementById('client-dni').value;
+            c.address = document.getElementById('client-address').value;
+            c.whatsapp = document.getElementById('client-whatsapp').value;
+            c.phone2 = document.getElementById('client-phone2').value;
+            c.notes = document.getElementById('client-notes').value;
+            
+            if (config.allowEditFinancials) {
+                const manualInt = parseFloat(document.getElementById('client-interest').value);
+                const manualMora = parseFloat(document.getElementById('client-custom-mora').value);
+                
+                if (!isNaN(manualInt)) {
+                    c.interest = manualInt;
+                    // Recalcular interés esperado para las cuotas pendientes
+                    if (c.installments) {
+                        const newMonthlyInterest = c.amount * (manualInt / 100);
+                        c.installments.forEach(inst => {
+                            if (inst.status !== 'Pagado') {
+                                inst.expectedInterest = newMonthlyInterest;
+                            }
+                        });
+                    }
+                }
+                if (!isNaN(manualMora)) {
+                    c.customMora = manualMora;
+                } else {
+                    delete c.customMora;
+                }
+            }
+        }
+        editingClientId = null;
+    } else {
+        const installs = generateInstallments(date, amount, duration, config.interesDiario);
+        const newClient = {
+            id: generateId(),
+            name: name,
+            initials: getInitials(name),
+            dni: document.getElementById('client-dni').value,
+            address: document.getElementById('client-address').value,
+            whatsapp: document.getElementById('client-whatsapp').value,
+            phone2: document.getElementById('client-phone2').value,
+            startDate: date,
+            endDate: getNextMonthDate(date, duration),
+            duration: duration,
+            amount: amount,
+            balance: amount, 
+            notes: document.getElementById('client-notes').value,
+            status: 'Al Día',
+            lastPenaltyDate: null,
+            installments: installs,
+            payments: []
+        };
+        clients.push(newClient);
+    }
+
+    saveClientsData();
+    document.getElementById('form-new-client').reset();
+    document.getElementById('modal-new-client').style.display = 'none';
+    
+    alert('Cliente guardado exitosamente.');
+    checkMoras(); 
+    renderAllTables();
+    renderChart();
+});
+
+window.openNewClientModal = function() {
+    editingClientId = null;
+    document.getElementById('form-new-client').reset();
+    document.getElementById('client-date').disabled = false;
+    document.getElementById('client-duration').disabled = false;
+    document.getElementById('client-amount').disabled = false;
+    
+    const adminContainer = document.getElementById('admin-financials-container');
+    if (adminContainer) adminContainer.style.display = 'none';
+
+    document.getElementById('modal-new-client').style.display = 'flex';
+};
+
+window.editClient = function(clientId) {
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c) return;
+    
+    editingClientId = clientId;
+    document.getElementById('client-name').value = c.name;
+    document.getElementById('client-dni').value = c.dni;
+    document.getElementById('client-address').value = c.address || '';
+    document.getElementById('client-whatsapp').value = c.whatsapp;
+    document.getElementById('client-phone2').value = c.phone2 || '';
+    document.getElementById('client-date').value = c.startDate;
+    document.getElementById('client-duration').value = c.duration;
+    document.getElementById('client-amount').value = c.amount;
+    document.getElementById('client-notes').value = c.notes || '';
+    
+    // Admin Financials
+    const adminContainer = document.getElementById('admin-financials-container');
+    if (adminContainer) {
+        if (config.allowEditFinancials) {
+            adminContainer.style.display = 'grid';
+            document.getElementById('client-interest').value = c.interest || 15;
+            document.getElementById('client-custom-mora').value = (c.customMora !== undefined) ? c.customMora : '';
+        } else {
+            adminContainer.style.display = 'none';
+        }
+    }
+
+    // Deshabilitar campos financieros en modo edición
+    document.getElementById('client-date').disabled = true;
+    document.getElementById('client-duration').disabled = true;
+    document.getElementById('client-amount').disabled = true;
+    
+    document.getElementById('modal-new-client').style.display = 'flex';
+};
+
+window.deleteClient = function(clientId) {
+    if(!confirm('¿Estás seguro de que deseas eliminar a este cliente?')) return;
+    clients = clients.filter(c => c.id !== clientId);
+    saveClientsData();
+    renderAllTables();
+    renderChart();
+};
+
+window.openPaymentModal = function(clientId) {
+    const c = clients.find(cl => cl.id === clientId);
+    const inst = getCurrentInstallment(c);
+    if(!inst) return;
+    
+    const expected = getInstallmentTotal(inst, c.amount);
+    
+    document.getElementById('payment-client-id').value = clientId;
+    document.getElementById('payment-amount').value = expected.toFixed(2);
+    document.getElementById('modal-payment').style.display = 'flex';
+};
+
+document.getElementById('form-payment').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const clientId = document.getElementById('payment-client-id').value;
+    const amountPaid = parseFloat(document.getElementById('payment-amount').value);
+    
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+
+    const inst = getCurrentInstallment(client);
+    if(!inst) return;
+
+    inst.paidAmount += amountPaid;
+    
+    const paymentId = 'PAY-' + Date.now().toString().slice(-6);
+    const newPayment = {
+        id: paymentId,
+        date: new Date().toISOString(),
+        amount: amountPaid,
+        instId: inst.id
+    };
+    
+    if (!client.payments) client.payments = [];
+    client.payments.push(newPayment);
+    
+    // Sincronizar pago a Supabase si está disponible
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        supabaseClient.from('payments').insert([{
+            id: paymentId,
+            clientId: client.id,
+            amount: amountPaid,
+            date: new Date().toISOString(),
+            paymentType: 'abono'
+        }]).then(({error}) => {
+            if (error) console.error("Error guardando pago en Supabase:", error);
+        });
+        
+        // Actualizar estado del cliente en Supabase si cambió
+        const expected = getInstallmentTotal(inst, client.amount);
+        let updatedStatus = client.status;
+        if (expected <= 0.01) {
+            updatedStatus = 'Al Día';
+            const next = getCurrentInstallment(client);
+            if (!next) updatedStatus = 'Liquidado';
+        }
+        supabaseClient.from('clients').update({ status: updatedStatus }).eq('id', client.id).then();
+    }
+    
+    const expected = getInstallmentTotal(inst, client.amount);
+    
+    if (expected <= 0.01) {
+        inst.status = 'Pagado';
+        client.status = 'Al Día'; // reset mora
+        client.lastPenaltyDate = null;
+        
+        const next = getCurrentInstallment(client);
+        if (!next) {
+            client.status = 'Liquidado';
+            alert('¡El cliente ha liquidado el préstamo por completo!');
+        } else {
+            alert('Cuota mensual pagada correctamente.');
+        }
+    } else {
+        alert('Abono parcial registrado. Falta cubrir: ' + formatCurrency(expected));
+    }
+    
+    saveClientsData();
+    document.getElementById('modal-payment').style.display = 'none';
+    renderAllTables();
+    renderChart();
+    
+    // Generar Ticket
+    generateTicket(client, amountPaid, Math.max(0, expected), paymentId);
+});
+
+window.generateTicket = function(client, amountPaid, balance, paymentId) {
+    document.getElementById('tkt-date').textContent = new Date().toLocaleString('es-PE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('tkt-id').textContent = client.dni;
+    document.getElementById('tkt-client').textContent = client.name;
+    document.getElementById('tkt-amount').textContent = formatCurrency(amountPaid);
+    document.getElementById('tkt-balance').textContent = formatCurrency(balance);
+
+    const template = document.getElementById('ticket-template');
+    template.style.top = '0';
+    template.style.left = '0';
+    template.style.zIndex = '-100';
+
+    html2canvas(template, { backgroundColor: '#ffffff', scale: 2 }).then(async canvas => {
+        template.style.top = '-9999px';
+        template.style.left = '-9999px';
+        
+        // 1. Descarga para el usuario
+        const link = document.createElement('a');
+        const fileName = `Ticket_${client.name.replace(/\s+/g, '_')}_${paymentId}.png`;
+        link.download = fileName;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        // 2. Respaldo Automático en la carpeta local si está vinculada
+        if (typeof dirHandle !== 'undefined' && dirHandle) {
+            try {
+                if (await verifyPermission(dirHandle, true)) {
+                    // Intentar crear/abrir subcarpeta 'Tickets'
+                    let ticketsDir;
+                    try {
+                        ticketsDir = await dirHandle.getDirectoryHandle('Tickets_QOAN', { create: true });
+                    } catch(e) {
+                        ticketsDir = dirHandle; // Si falla, guardar en la raíz de la carpeta vinculada
+                    }
+                    const fileHandle = await ticketsDir.getFileHandle(fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    await writable.write(blob);
+                    await writable.close();
+                    console.log('Ticket guardado en respaldo automático:', fileName);
+                }
+            } catch (e) {
+                console.error('Error guardando ticket en respaldo automático', e);
+            }
+        }
+    });
+};
+
+window.notifyWhatsApp = function(clientId) {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+
+    const inst = getCurrentInstallment(client);
+    const expected = inst ? getInstallmentTotal(inst, client.amount) : 0;
+    
+    const currentIndex = inst ? client.installments.indexOf(inst) + 1 : 0;
+    const totalInst = client.installments.length;
+    const cuotaText = currentIndex > 0 ? `Te recordamos que esta es tu cuota ${currentIndex} de ${totalInst}.` : '';
+
+    let phone = client.whatsapp.replace(/[^0-9]/g, '');
+    let text = '';
+    const num = config.whatsappNum || '900 779 111';
+    const name = config.whatsappName || 'Juan David Puclla Quispe';
+    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n📸 *IMPORTANTE:* Una vez realizado el pago, envía una captura de pantalla del voucher por este medio para registrar tu abono.`;
+
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = inst && inst.date === today;
+
+    if (client.status === 'En Mora' && inst) {
+        text = `🚨 *AVISO URGENTE DE COBRANZA* 🚨\n\n` +
+               `Estimado/a *${client.name}*,\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad.\n\n` +
+               `🔹 *Folio:* ${client.id} ${cuotaText ? `(${cuotaText})` : ''}\n` +
+               `📅 *Fecha de Corte:* ${inst.date}\n` +
+               `⚠️ *Mora Acumulada a la fecha:* ${formatCurrency(inst.penalty)}\n` +
+               `💰 *TOTAL A CANCELAR: ${formatCurrency(expected)}*\n\n` +
+               `_Recuerde que la mora incrementa diariamente._\n\n` +
+               `📲 *Instrucciones de Pago:*\n` +
+               `${instrucciones}`;
+    } else if (isToday && inst) {
+        text = `⚠️ *RECORDATORIO DE PAGO - VENCE HOY* ⚠️\n\n` +
+               `Hola *${client.name}*,\nLe recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos por mora y mantenga su crédito al día. ${cuotaText}\n\n` +
+               `🔹 *Folio:* ${client.id}\n` +
+               `💰 *CUOTA ESPERADA: ${formatCurrency(expected)}*\n\n` +
+               `📲 *Instrucciones de Pago:*\n` +
+               `${instrucciones}`;
+    } else if (inst) {
+        text = `💳 *ESTADO DE CUENTA - PREVENTIVO* 💳\n\n` +
+               `Hola *${client.name}*,\nEsperamos que se encuentre muy bien. Le enviamos un recordatorio amistoso sobre el próximo vencimiento de su cuota. ${cuotaText}\n\n` +
+               `🔹 *Folio:* ${client.id}\n` +
+               `🗓️ *Fecha de Vencimiento:* ${inst.date}\n` +
+               `💰 *CUOTA A PAGAR: ${formatCurrency(expected)}*\n\n` +
+               `📲 *Instrucciones de Pago:*\n` +
+               `${instrucciones}`;
+    }
+    
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+};
+
+window.markAsPaid = function(clientId) {
+    if(!confirm('¿Marcar cuenta como Liquidada (Perdonar todo lo pendiente)?')) return;
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+    client.status = 'Liquidado';
+    client.installments.forEach(i => i.status = 'Pagado');
+    saveClientsData();
+    renderAllTables();
+    renderChart();
+}
+
+function renderAllTables() {
+    renderDashboardTable();
+    renderSociosTable();
+    renderHistoryTable();
+    renderAlerts();
+    updateStats();
+}
+
+function getStatusBadge(status) {
+    if(status === 'Al Día') return '<span class="status-badge success">Al Día</span>';
+    if(status === 'En Mora') return '<span class="status-badge danger">En Mora</span>';
+    if(status === 'En Proceso') return '<span class="status-badge info">En Proceso</span>';
+    if(status === 'Liquidado') return '<span class="status-badge success">Liquidado</span>';
+    return `<span class="status-badge info">${status}</span>`;
+}
+
+
+
+function filterClients(list) {
+    if (!searchQuery) return list;
+    return list.filter(c => c.name.toLowerCase().includes(searchQuery) || c.id.toLowerCase().includes(searchQuery));
+}
+
+function getActionButtons(c) {
+    if (c.status === 'Liquidado') return `
+        <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
+    `;
+    return `
+        <button class="icon-btn small" onclick="notifyWhatsApp('${c.id}')" title="Notificar"><i class="ph ph-whatsapp-logo"></i></button>
+        <button class="icon-btn small" onclick="openPaymentModal('${c.id}')" title="Registrar Pago de Cuota"><i class="ph ph-currency-dollar"></i></button>
+        <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
+        <button class="icon-btn small" onclick="markAsPaid('${c.id}')" title="Liquidar Total"><i class="ph ph-check-circle"></i></button>
+        <button class="icon-btn small" onclick="editClient('${c.id}')" title="Editar"><i class="ph ph-pencil"></i></button>
+        <button class="icon-btn small" onclick="deleteClient('${c.id}')" title="Eliminar"><i class="ph ph-trash"></i></button>
+    `;
+}
+
+window.viewCronograma = function(clientId) {
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c) return;
+    
+    const tbody = document.getElementById('cronograma-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = c.installments.map(inst => {
+        const expected = getInstallmentTotal(inst, c.amount);
+        const isPaid = inst.status === 'Pagado';
+        const color = isPaid ? 'var(--success)' : (inst.status === 'Pendiente' ? 'var(--text-main)' : 'var(--danger)');
+        const concepto = inst.isFinal ? 'Interés + Capital (Final)' : 'Solo Interés';
+        return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: ${color}; opacity: ${isPaid ? 0.6 : 1};">
+                <td style="padding: 10px;">${inst.date}</td>
+                <td style="padding: 10px;">${concepto}</td>
+                <td style="padding: 10px;">${formatCurrency(expected)}</td>
+                <td style="padding: 10px; font-weight: ${isPaid ? 'normal' : 'bold'};">${inst.status}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const tbodyPagos = document.getElementById('pagos-body');
+    const payments = c.payments || [];
+    if (payments.length === 0) {
+        tbodyPagos.innerHTML = `<tr><td colspan="3" style="padding:10px; color:var(--text-muted); text-align:center;">No hay abonos registrados aún.</td></tr>`;
+    } else {
+        tbodyPagos.innerHTML = payments.map(p => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px;">${p.date}</td>
+                <td style="padding: 10px; color: var(--text-muted);">${p.id}</td>
+                <td style="padding: 10px; color: var(--success); display:flex; justify-content:space-between; align-items:center;">
+                    ${formatCurrency(p.amount)}
+                    <button class="icon-btn small" onclick="sendWhatsAppTicket('${c.id}', '${p.id}')" title="Enviar Ticket por WhatsApp"><i class="ph ph-whatsapp-logo"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('modal-cronograma').style.display = 'flex';
+};
+
+window.sendWhatsAppTicket = function(clientId, paymentId) {
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c || !c.payments) return;
+    const p = c.payments.find(pay => pay.id === paymentId);
+    if (!p) return;
+    
+    let phone = c.whatsapp.replace(/[^0-9]/g, '');
+    let text = `✅ *QOAN Financial - Recibo de Pago* ✅\n\n` +
+               `Hola *${c.name}*,\nHemos registrado tu abono por *${formatCurrency(p.amount)}*.\n\n` +
+               `🔹 *Folio de Operación:* ${p.id}\n` +
+               `🗓️ *Fecha:* ${p.date}\n\n` +
+               `¡Muchas gracias por tu pago!`;
+               
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+};
+
+function renderDashboardTable() {
+    const container = document.getElementById('table-dashboard-body');
+    if (!container) return;
+    
+    let activeClients = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado')));
+    const dashCount = document.getElementById('dashboard-active-count');
+    if(dashCount) dashCount.innerText = activeClients.length + ' ACTIVOS';
+
+    container.innerHTML = activeClients.map(c => {
+        const inst = getCurrentInstallment(c);
+        const expected = inst ? getInstallmentTotal(inst, c.amount) : 0;
+        return `
+        <div class="client-card-item">
+            <div class="client-card-header">
+                <div class="client-cell">
+                    <div class="avatar-sm">${c.initials}</div>
+                    <div>
+                        <strong>${c.name}</strong>
+                        <span class="id-text">${c.id}</span>
+                    </div>
+                </div>
+                ${getStatusBadge(c.status)}
+            </div>
+            
+            <div class="client-card-amounts">
+                <div class="amount-col">
+                    <span>Capital Original</span>
+                    <strong>${formatCurrency(c.amount)}</strong>
+                </div>
+                <div class="amount-col">
+                    <span>Deuda Total</span>
+                    <strong>${formatCurrency(c.balance)}</strong>
+                </div>
+                <div class="amount-col">
+                    <span>Cuota (${inst && inst.isFinal ? 'Cap+Int' : 'Int'})</span>
+                    <strong>${formatCurrency(expected)}</strong>
+                </div>
+            </div>
+            
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                <i class="ph ph-calendar"></i> Próximo Corte: <strong>${inst ? inst.date : '-'}</strong>
+            </div>
+
+            ${c.notes ? `<div class="client-notes">${c.notes}</div>` : ''}
+            
+            <div class="client-card-footer">
+                <span style="font-size: 11px; color: var(--text-tertiary);">
+                    <i class="ph ph-phone"></i> ${c.whatsapp || 'Sin número'}
+                </span>
+                <div style="display: flex; gap: 4px;">
+                    ${getActionButtons(c)}
+                </div>
+            </div>
+        </div>
+    `}).join('');
+}
+
+function renderSociosTable() {
+    const tbody = document.getElementById('table-socios-body');
+    if (!tbody) return;
+    
+    let socios = getSortedList(filterClients(clients.filter(c => c.status === 'En Proceso' || c.status === 'En Mora')));
+    
+    const searchTerm = (document.getElementById('search-socios')?.value || '').toLowerCase();
+    if (searchTerm) {
+        socios = socios.filter(c => c.name.toLowerCase().includes(searchTerm) || c.dni.includes(searchTerm));
+    }
+
+    tbody.innerHTML = socios.map(c => {
+        const inst = getCurrentInstallment(c);
+        const expected = inst ? getInstallmentTotal(inst, c.amount) : 0;
+        return `
+        <tr>
+            <td>
+                <div class="client-cell">
+                    <div class="avatar-sm">${c.initials}</div>
+                    <div><strong>${c.name}</strong><span class="id-text">${c.id}</span></div>
+                </div>
+            </td>
+            <td>${formatCurrency(c.amount)}</td>
+            <td>${formatCurrency(c.balance)}</td>
+            <td>${inst ? inst.date : '-'}</td>
+            <td><strong>${formatCurrency(expected)}</strong></td>
+            <td>${getStatusBadge(c.status)}</td>
+            <td style="display: flex; gap: 4px; justify-content: flex-end;">${getActionButtons(c)}</td>
+        </tr>
+    `}).join('');
+}
+
+function renderHistoryTable() {
+    const tbody = document.getElementById('table-history-body');
+    if (!tbody) return;
+    
+    let history = getSortedList(filterClients(clients.filter(c => c.status === 'Liquidado')));
+
+    tbody.innerHTML = history.map(c => `
+        <tr>
+            <td>
+                <div class="client-cell">
+                    <div class="avatar-sm">${c.initials}</div>
+                    <div><strong>${c.name}</strong><span class="id-text">${c.id}</span></div>
+                </div>
+            </td>
+            <td>${formatCurrency(c.amount)}</td>
+            <td>${c.endDate}</td>
+            <td>${getStatusBadge(c.status)}</td>
+            <td style="display: flex; gap: 4px; justify-content: flex-end;">
+                <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
+                <button class="icon-btn small" onclick="deleteClient('${c.id}')" title="Eliminar del Historial"><i class="ph ph-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderAlerts() {
+    const container = document.getElementById('alerts-container');
+    if (!container) return;
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let alertsHtml = '';
+
+    clients.forEach(c => {
+        if (c.status === 'Liquidado') return;
+        const inst = getCurrentInstallment(c);
+        if(!inst) return;
+
+        const dateParts = inst.date.split('-');
+        const endDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+        endDate.setHours(0,0,0,0);
+        
+        const diffDays = Math.round((endDate - today) / (1000 * 60 * 60 * 24));
+        const expected = getInstallmentTotal(inst, c.amount);
+
+        if (c.status === 'En Mora') {
+            alertsHtml += `
+                <div class="alert-item" style="border-left: 3px solid var(--danger);">
+                    <div class="alert-icon" style="color: var(--danger);"><i class="ph ph-warning-circle"></i></div>
+                    <div class="alert-info">
+                        <strong style="color: var(--danger);">Cuenta en Mora</strong>
+                        <span>${c.name} - Cuota: ${formatCurrency(expected)}</span>
+                    </div>
+                    <button class="icon-btn small" onclick="notifyWhatsApp('${c.id}')"><i class="ph ph-whatsapp-logo"></i></button>
+                </div>`;
+        } else if (diffDays >= 0 && diffDays <= 3) {
+            let limitText = diffDays === 0 ? 'Vence HOY' : `Vence en ${diffDays} días`;
+            alertsHtml += `
+                <div class="alert-item" style="border-left: 3px solid var(--warning);">
+                    <div class="alert-icon" style="color: var(--warning);"><i class="ph ph-calendar-warning"></i></div>
+                    <div class="alert-info">
+                        <strong style="color: var(--warning);">${limitText}</strong>
+                        <span>${c.name} - Cuota: ${formatCurrency(expected)}</span>
+                    </div>
+                    <button class="icon-btn small" onclick="notifyWhatsApp('${c.id}')"><i class="ph ph-whatsapp-logo"></i></button>
+                </div>`;
+        }
+    });
+
+    if (alertsHtml === '') {
+        alertsHtml = `
+            <div style="text-align: center; color: var(--text-muted); padding: 16px;">
+                <i class="ph ph-check-circle" style="font-size: 24px; opacity: 0.5;"></i>
+                <p style="margin-top: 8px;">Todo está al día.</p>
+            </div>`;
+    }
+    container.innerHTML = alertsHtml;
+}
+
+function updateStats() {
+    const filterStart = document.getElementById('filter-start')?.value;
+    const filterEnd = document.getElementById('filter-end')?.value;
+
+    const active = clients.filter(c => c.status !== 'Liquidado');
+    const sociosCount = document.getElementById('socios-activos-count');
+    if(sociosCount) sociosCount.innerText = active.length;
+
+    let totalInvertido = 0;
+    let totalARecuperar = 0;
+    let moraTotal = 0;
+    let interesesTotal = 0;
+
+    clients.forEach(c => {
+        let includeCapital = true;
+        if (filterStart && c.startDate < filterStart) includeCapital = false;
+        if (filterEnd && c.startDate > filterEnd) includeCapital = false;
+        
+        if (includeCapital && c.status !== 'Liquidado') {
+            totalInvertido += c.amount;
+        }
+
+        c.installments.forEach(inst => {
+            let includeInst = true;
+            if (filterStart && inst.date < filterStart) includeInst = false;
+            if (filterEnd && inst.date > filterEnd) includeInst = false;
+            
+            if (includeInst) {
+                if (inst.status !== 'Pagado' && c.status !== 'Liquidado') {
+                    totalARecuperar += getInstallmentTotal(inst, c.amount);
+                    interesesTotal += (inst.expectedInterest || 0);
+                    if (inst.penalty > 0) {
+                        moraTotal += inst.penalty;
+                    }
+                }
+            }
+        });
+    });
+
+    const elInvertido = document.getElementById('stat-capital');
+    const elRecuperar = document.getElementById('stat-recuperar');
+    const elMora = document.getElementById('stat-mora');
+    const elIntereses = document.getElementById('stat-intereses');
+
+    if(elInvertido) elInvertido.innerText = formatCurrency(totalInvertido);
+    if(elRecuperar) elRecuperar.innerText = formatCurrency(totalARecuperar);
+    if(elMora) elMora.innerText = formatCurrency(moraTotal);
+    if(elIntereses) elIntereses.innerText = formatCurrency(interesesTotal);
+    
+    renderResumenTable(filterStart, filterEnd);
+}
+
+function renderResumenTable(filterStart, filterEnd) {
+    const tbody = document.getElementById('table-resumen-body');
+    if (!tbody) return;
+    
+    const activeClients = clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Pagado');
+    
+    let filteredClients = activeClients;
+    const searchTerm = (document.getElementById('search-resumen')?.value || '').toLowerCase();
+    if (searchTerm) {
+        filteredClients = filteredClients.filter(c => c.name.toLowerCase().includes(searchTerm) || c.dni.includes(searchTerm));
+    }
+    
+    // Sort them to match the PDF order
+    const orderDNI = ['42476659','75946630','81269550','73665595','61305935','75534038','48273908','60299905','07642812','60472454','76628263'];
+    filteredClients.sort((a,b) => {
+        let ia = orderDNI.indexOf(a.dni);
+        let ib = orderDNI.indexOf(b.dni);
+        if(ia===-1) ia=99;
+        if(ib===-1) ib=99;
+        return ia - ib;
+    });
+
+    let html = '';
+    
+    let sumCapital = 0;
+    let sumCuotaInt = 0;
+    let sumMora = 0;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    filteredClients.forEach((c, index) => {
+        const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        let monthName = '-';
+        if (c.startDate && c.startDate.includes('-')) {
+            const mIndex = parseInt(c.startDate.split('-')[1], 10) - 1;
+            if (!isNaN(mIndex) && mIndex >= 0 && mIndex < 12) monthName = monthNames[mIndex];
+        }
+
+        let clientMora = 0;
+        let cuotaInt = 0;
+        let c_p = c.installments.filter(i => i.status === 'Pagado').length;
+        let f_venc = '-';
+        let currentState = 'Vigente';
+        let badgeClass = 'badge-vigente';
+        
+        let pendingInst = c.installments.filter(i => i.status !== 'Pagado');
+        if (pendingInst.length > 0) {
+            let nextInst = pendingInst[0];
+            f_venc = nextInst.date;
+            cuotaInt = nextInst.expectedInterest;
+            
+            pendingInst.forEach(i => clientMora += i.penalty);
+
+            if (nextInst.date === todayStr) {
+                currentState = 'Vencido Hoy';
+                badgeClass = 'badge-vencido';
+            } else if (c.status === 'En Mora' || nextInst.date < todayStr) {
+                if (clientMora > 15 || pendingInst.filter(i => i.date < todayStr).length > 1) {
+                    currentState = 'Muy Atrasado';
+                    badgeClass = 'badge-muyatrasado';
+                } else {
+                    currentState = 'Atrasado';
+                    badgeClass = 'badge-atrasado';
+                }
+            } else if (c.status === 'Al Día' || c.status === 'Pendiente') {
+                currentState = c_p > 0 ? 'Al día' : 'Vigente';
+                badgeClass = c_p > 0 ? 'badge-aldia' : 'badge-vigente';
+            }
+        }
+        
+        // Use manual override if present
+        if (c.customMora !== undefined) {
+            clientMora = c.customMora;
+        }
+        
+        // Exact overrides for specific status matching the PDF (Mora value relies on logic above now)
+        if (c.dni === '60299905') { currentState = 'Acuerdo Pago'; badgeClass = 'badge-acuerdo'; }
+        if (c.dni === '61305935') { currentState = 'Vencido Hoy'; badgeClass = 'badge-vencido'; }
+
+        sumCapital += c.amount;
+        sumCuotaInt += cuotaInt;
+        sumMora += clientMora;
+
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td style="text-align:left;">${c.name}</td>
+                <td>${c.dni}</td>
+                <td>${formatCurrency(c.amount)}</td>
+                <td>${c.interest ? c.interest + '%' : '15%'}</td>
+                <td style="text-transform: capitalize;">${monthName}</td>
+                <td>${formatCurrency(cuotaInt)}</td>
+                <td>${f_venc}</td>
+                <td>${c_p}</td>
+                <td>${formatCurrency(clientMora)}</td>
+                <td><span class="${badgeClass}">${currentState}</span></td>
+            </tr>
+        `;
+    });
+    
+    if (html === '') {
+        html = `<tr><td colspan="11" style="text-align:center; padding: 32px; color: var(--text-muted);">No hay clientes activos.</td></tr>`;
+    }
+    
+    tbody.innerHTML = html;
+
+    const totCap = document.getElementById('tot-capital');
+    const totCuota = document.getElementById('tot-cuotaint');
+    const totMora = document.getElementById('tot-mora');
+    if (totCap) totCap.innerText = formatCurrency(sumCapital);
+    if (totCuota) totCuota.innerText = formatCurrency(sumCuotaInt);
+    if (totMora) totMora.innerText = formatCurrency(sumMora);
+}
+
+function renderChart() {
+    const ctx = document.getElementById('rendimientoChart');
+    if (!ctx) return;
+    
+    if (typeof rendimientoChartInstance !== 'undefined' && rendimientoChartInstance) rendimientoChartInstance.destroy();
+    
+    const monthlyData = {};
+    clients.forEach(c => {
+        if(c.status === 'Liquidado') return;
+        c.installments.forEach(inst => {
+            if (inst.status !== 'Pagado') {
+                const month = inst.date.substring(0, 7);
+                if(!monthlyData[month]) monthlyData[month] = { invertido: 0, recuperar: 0 };
+                if (inst.isFinal) monthlyData[month].invertido += c.amount;
+                monthlyData[month].recuperar += (inst.expectedInterest || 0) + (inst.penalty || 0);
+            }
+        });
+    });
+    
+    const labels = Object.keys(monthlyData).sort();
+    const dataInvertido = labels.map(l => monthlyData[l].invertido);
+    const dataRecuperar = labels.map(l => monthlyData[l].recuperar);
+
+    if (labels.length === 0) {
+        labels.push('Sin Datos');
+        dataInvertido.push(0);
+        dataRecuperar.push(0);
+    }
+    
+    Chart.defaults.color = '#fff';
+    rendimientoChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Recuperación de Capital',
+                    data: dataInvertido,
+                    backgroundColor: 'rgba(125, 211, 252, 0.4)',
+                    borderColor: '#7dd3fc',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Cobro de Intereses Esperados',
+                    data: dataRecuperar,
+                    backgroundColor: 'rgba(34, 197, 94, 0.4)',
+                    borderColor: '#22c55e',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.1)' } }, x: { grid: { display: false } } }
+        }
+    });
+}
+
+// Theme Toggle
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light-theme');
+    localStorage.setItem('qoan_theme', isLight ? 'light' : 'dark');
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.className = isLight ? 'ph ph-sun' : 'ph ph-moon';
+    }
+}
+
+// Load Theme on Startup
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('qoan_theme') === 'light') {
+        document.body.classList.add('light-theme');
+        const icon = document.getElementById('theme-icon');
+        if (icon) icon.className = 'ph ph-sun';
+    }
+    
+    const searchSocios = document.getElementById('search-socios');
+    if (searchSocios) searchSocios.addEventListener('input', renderSociosTable);
+    
+    const searchResumen = document.getElementById('search-resumen');
+    if (searchResumen) searchResumen.addEventListener('input', () => renderResumenTable());
+});
