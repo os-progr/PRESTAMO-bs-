@@ -139,6 +139,9 @@
                 <a href="#" class="nav-item" id="nav-admin-public" style="border-top: 1px solid rgba(255,255,255,0.05); margin-top: 8px; padding-top: 16px;">
                     <i class="ph ph-globe"></i> Admin Público
                 </a>
+                <a href="#" class="nav-item" id="nav-contrato">
+                    <i class="ph ph-file-text"></i> Generar Contrato
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -439,6 +442,60 @@
                         </table>
                     </div>
                 </div>
+
+            <!-- Admin Public View -->
+            <div id="view-admin-public" class="view-section" style="display: none;">
+                <div class="content-header">
+                    <div>
+                        <h2>Admin Público</h2>
+                        <p class="subtitle">"Selecciona qué clientes se muestran en la página web pública."</p>
+                    </div>
+                    <div class="header-buttons">
+                        <a href="public_view.html" target="_blank" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-arrow-square-out"></i> Abrir Página Pública
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Gestión de Visibilidad</h3>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Capital Original</th>
+                                    <th>Próximo Corte</th>
+                                    <th>Estado</th>
+                                    <th>Visible al Público</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-public-table-body">
+                                <!-- Data from JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generar Contrato View -->
+            <div id="view-contrato" class="view-section" style="display: none;">
+                <div class="content-header">
+                    <div>
+                        <h2>Generar Contrato</h2>
+                        <p class="subtitle">"Aquí se integrará tu herramienta de generación de contratos."</p>
+                    </div>
+                </div>
+
+                <div class="card" style="text-align: center; padding: 64px 24px;">
+                    <i class="ph ph-file-text" style="font-size: 64px; color: var(--text-muted); margin-bottom: 24px;"></i>
+                    <h3 style="color: var(--text-primary); margin-bottom: 8px;">Espacio Reservado para Contratos</h3>
+                    <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">
+                        Cuando tengas lista la carpeta con el código de los contratos, integraremos la herramienta en esta sección.
+                    </p>
+                </div>
             </div>
 
             <!-- Admin Public View -->
@@ -620,16 +677,18 @@
         const navConfig = document.getElementById('nav-config');
         const navResumen = document.getElementById('nav-resumen');
         const navAdminPublic = document.getElementById('nav-admin-public');
+        const navContrato = document.getElementById('nav-contrato');
 
         const viewDashboard = document.getElementById('dashboard-view');
         const viewHistory = document.getElementById('history-view');
         const viewSocios = document.getElementById('socios-view');
         const viewConfig = document.getElementById('config-view');
         const viewResumen = document.getElementById('resumen-view');
-        const viewAdminPublic = document.getElementById('admin-public-view');
+        const viewAdminPublic = document.getElementById('view-admin-public');
+        const viewContrato = document.getElementById('view-contrato');
 
-        const allNavs = [navDashboard, navHistory, navSocios, navConfig, navResumen, navAdminPublic];
-        const allViews = [viewDashboard, viewHistory, viewSocios, viewConfig, viewResumen, viewAdminPublic];
+        const allNavs = [navDashboard, navHistory, navSocios, navConfig, navResumen, navAdminPublic, navContrato];
+        const allViews = [viewDashboard, viewHistory, viewSocios, viewConfig, viewResumen, viewAdminPublic, viewContrato];
 
         function switchView(activeNav, activeView) {
             allNavs.forEach(nav => { if(nav) nav.classList.remove('active') });
@@ -645,6 +704,7 @@
         if(navConfig) navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView(navConfig, viewConfig); });
         if(navResumen) navResumen.addEventListener('click', (e) => { e.preventDefault(); switchView(navResumen, viewResumen); });
         if(navAdminPublic) navAdminPublic.addEventListener('click', (e) => { e.preventDefault(); switchView(navAdminPublic, viewAdminPublic); });
+        if(navContrato) navContrato.addEventListener('click', (e) => { e.preventDefault(); switchView(navContrato, viewContrato); });
 
         // Modal Logic
         const fab = document.getElementById('btn-add-client');
