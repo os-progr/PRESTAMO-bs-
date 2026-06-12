@@ -67,6 +67,7 @@
                     <thead>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary);">
                             <th style="padding: 12px;">Cliente</th>
+                            <th style="padding: 12px;">DNI</th>
                             <th style="padding: 12px;">Monto Original</th>
                             <th style="padding: 12px;">Fecha de Registro</th>
                             <th style="padding: 12px;">Plazo</th>
@@ -136,7 +137,7 @@
             document.getElementById('content').style.display = 'block';
 
             if (clients.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--text-muted);">No hay clientes visibles públicamente.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding: 24px; text-align: center; color: var(--text-muted);">No hay clientes visibles públicamente.</td></tr>';
                 return;
             }
 
@@ -157,6 +158,7 @@
                 return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <td style="padding: 16px 12px; font-weight: 500;">${c.name}</td>
+                    <td style="padding: 16px 12px;">${c.dni || '-'}</td>
                     <td style="padding: 16px 12px;">${formatCurrency(c.amount || 0)}</td>
                     <td style="padding: 16px 12px;">${dateDisplay}</td>
                     <td style="padding: 16px 12px;">${c.term || 1} Mes(es)</td>
