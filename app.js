@@ -176,6 +176,37 @@ function mapSupabaseClientToApp(row) {
     };
 }
 
+function mapAppClientToSupabase(c) {
+    const isLiquidado = c.status === 'Liquidado' || c.balance <= 0;
+    const mappedStatus = isLiquidado ? 'Pagado' : (c.status === 'Al Día' ? 'Pendiente' : c.status);
+    return {
+        id: c.id,
+        name: c.name,
+        dni: c.dni,
+        maps: c.address,
+        phone: c.whatsapp,
+        startDate: c.startDate,
+        term: c.duration,
+        amount: c.amount,
+        remainingBalance: c.balance,
+        notes: c.notes,
+        status: mappedStatus,
+        date: new Date().toISOString()
+    };
+}
+
+async function syncClientToSupabase(c) {
+    if (!supabaseClient) return;
+    try {
+        const rowData = mapAppClientToSupabase(c);
+        const { error } = await supabaseClient.from('clients').upsert(rowData);
+        if (error) throw error;
+        console.log('Synced client to Supabase:', c.id);
+    } catch (e) {
+        console.error('Error syncing client to Supabase:', e);
+    }
+}
+
 async function loadClientsFromSupabase() {
     if (!supabaseClient) return;
     try {
@@ -425,111 +456,121 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
     const duration = document.getElementById('client-duration').value;
     const amount = parseFloat(document.getElementById('client-amount').value);
     
-    if (editingClientId) {
-        const c = clients.find(cl => cl.id === editingClientId);
-        if (c) {
-            c.name = name;
-            c.initials = getInitials(name);
-            c.dni = document.getElementById('client-dni').value;
-            c.address = document.getElementById('client-address').value;
-            c.whatsapp = document.getElementById('client-whatsapp').value;
-            c.phone2 = document.getElementById('client-phone2').value;
-            c.notes = document.getElementById('client-notes').value;
-            
-            if (config.allowEditFinancials) {
-                const manualInt = parseFloat(document.getElementById('client-interest').value);
-                const manualMora = parseFloat(document.getElementById('client-custom-mora').value);
+        if (editingClientId) {
+            const c = clients.find(cl => cl.id === editingClientId);
+            if (c) {
+                c.name = name;
+                c.initials = getInitials(name);
+                c.dni = document.getElementById('client-dni').value;
+                c.address = document.getElementById('client-address').value;
+                c.whatsapp = document.getElementById('client-whatsapp').value;
+                c.phone2 = document.getElementById('client-phone2').value;
+                c.notes = document.getElementById('client-notes').value;
                 
-                if (!isNaN(manualInt)) {
-                    c.interest = manualInt;
-                    // Recalcular interés esperado para las cuotas pendientes
-                    if (c.installments) {
-                        const newMonthlyInterest = c.amount * (manualInt / 100);
-                        c.installments.forEach(inst => {
-                            if (inst.status !== 'Pagado') {
-                                inst.expectedInterest = newMonthlyInterest;
+                if (config.allowEditFinancials) {
+                    const manualInt = parseFloat(document.getElementById('client-interest').value);
+                    const manualMora = parseFloat(document.getElementById('client-custom-mora').value);
+                    
+                    if (!isNaN(manualInt)) {
+                        c.interest = manualInt;
+                        // Recalcular interés esperado para las cuotas pendientes
+                        if (c.installments) {
+                            const newMonthlyInterest = c.amount * (manualInt / 100);
+                            c.installments.forEach(inst => {
+                                if (inst.status !== 'Pagado') {
+                                    inst.expectedInterest = newMonthlyInterest;
+                                }
+                            });
+                        }
+                    }
+                    
+                    const newDate = document.getElementById('client-date').value;
+                    const newDuration = parseInt(document.getElementById('client-duration').value);
+                    const newAmount = parseFloat(document.getElementById('client-amount').value);
+                    
+                    let needsRegen = false;
+                    if (newDate && newDate !== c.startDate) {
+                        c.startDate = newDate;
+                        c.endDate = getNextMonthDate(newDate, c.duration);
+                        needsRegen = true;
+                    }
+                    if (newDuration && newDuration !== parseInt(c.duration)) {
+                        c.duration = newDuration;
+                        c.endDate = getNextMonthDate(c.startDate, newDuration);
+                        needsRegen = true;
+                    }
+                    if (newAmount && newAmount !== c.amount) {
+                        c.amount = newAmount;
+                        c.balance = newAmount; // Reset balance to new amount
+                        needsRegen = true;
+                    }
+
+                    if (needsRegen && c.installments) {
+                        // Generate a fresh set of installments
+                        const newInstalls = generateInstallments(c.startDate, c.amount, c.duration, c.interest, true);
+                        // Overlay any already paid installments
+                        newInstalls.forEach((newInst, idx) => {
+                            const oldInst = c.installments[idx];
+                            if (oldInst && oldInst.status === 'Pagado') {
+                                newInst.status = 'Pagado';
+                                newInst.paidAmount = oldInst.paidAmount;
+                                newInst.penalty = oldInst.penalty;
+                                newInst.paymentDate = oldInst.paymentDate;
                             }
                         });
+                        c.installments = newInstalls;
+                    }
+                    if (!isNaN(manualMora)) {
+                        c.customMora = manualMora;
+                    } else {
+                        delete c.customMora;
                     }
                 }
-                
-                const newDate = document.getElementById('client-date').value;
-                const newDuration = parseInt(document.getElementById('client-duration').value);
-                const newAmount = parseFloat(document.getElementById('client-amount').value);
-                
-                let needsRegen = false;
-                if (newDate && newDate !== c.startDate) {
-                    c.startDate = newDate;
-                    c.endDate = getNextMonthDate(newDate, c.duration);
-                    needsRegen = true;
-                }
-                if (newDuration && newDuration !== parseInt(c.duration)) {
-                    c.duration = newDuration;
-                    c.endDate = getNextMonthDate(c.startDate, newDuration);
-                    needsRegen = true;
-                }
-                if (newAmount && newAmount !== c.amount) {
-                    c.amount = newAmount;
-                    c.balance = newAmount; // Reset balance to new amount
-                    needsRegen = true;
-                }
-
-                if (needsRegen && c.installments) {
-                    // Generate a fresh set of installments
-                    const newInstalls = generateInstallments(c.startDate, c.amount, c.duration, c.interest, true);
-                    // Overlay any already paid installments
-                    newInstalls.forEach((newInst, idx) => {
-                        const oldInst = c.installments[idx];
-                        if (oldInst && oldInst.status === 'Pagado') {
-                            newInst.status = 'Pagado';
-                            newInst.paidAmount = oldInst.paidAmount;
-                            newInst.penalty = oldInst.penalty;
-                            newInst.paymentDate = oldInst.paymentDate;
-                        }
-                    });
-                    c.installments = newInstalls;
-                }
-                if (!isNaN(manualMora)) {
-                    c.customMora = manualMora;
-                } else {
-                    delete c.customMora;
-                }
+            }
+            
+            saveClientsData();
+            if (c && typeof syncClientToSupabase === 'function') {
+                syncClientToSupabase(c);
+            }
+            
+            editingClientId = null;
+        } else {
+            const installs = generateInstallments(date, amount, duration, config.interesDiario);
+            const newClient = {
+                id: generateId(),
+                name: name,
+                initials: getInitials(name),
+                dni: document.getElementById('client-dni').value,
+                address: document.getElementById('client-address').value,
+                whatsapp: document.getElementById('client-whatsapp').value,
+                phone2: document.getElementById('client-phone2').value,
+                startDate: date,
+                endDate: getNextMonthDate(date, duration),
+                duration: duration,
+                amount: amount,
+                balance: amount, 
+                notes: document.getElementById('client-notes').value,
+                status: 'Al Día',
+                lastPenaltyDate: null,
+                installments: installs,
+                payments: []
+            };
+            clients.push(newClient);
+            
+            saveClientsData();
+            if (typeof syncClientToSupabase === 'function') {
+                syncClientToSupabase(newClient);
             }
         }
-        editingClientId = null;
-    } else {
-        const installs = generateInstallments(date, amount, duration, config.interesDiario);
-        const newClient = {
-            id: generateId(),
-            name: name,
-            initials: getInitials(name),
-            dni: document.getElementById('client-dni').value,
-            address: document.getElementById('client-address').value,
-            whatsapp: document.getElementById('client-whatsapp').value,
-            phone2: document.getElementById('client-phone2').value,
-            startDate: date,
-            endDate: getNextMonthDate(date, duration),
-            duration: duration,
-            amount: amount,
-            balance: amount, 
-            notes: document.getElementById('client-notes').value,
-            status: 'Al Día',
-            lastPenaltyDate: null,
-            installments: installs,
-            payments: []
-        };
-        clients.push(newClient);
-    }
-
-    saveClientsData();
-    document.getElementById('form-new-client').reset();
-    document.getElementById('modal-new-client').style.display = 'none';
-    
-    alert('Cliente guardado exitosamente.');
-    checkMoras(); 
-    renderAllTables();
-    renderChart();
-});
+        
+        document.getElementById('form-new-client').reset();
+        document.getElementById('modal-new-client').style.display = 'none';
+        
+        alert('Cliente guardado exitosamente.');
+        checkMoras(); 
+        renderAllTables();
+        renderChart();
+    });
 
 window.openNewClientModal = function() {
     editingClientId = null;
