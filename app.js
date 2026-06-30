@@ -452,6 +452,17 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                         });
                     }
                 }
+                
+                const newDate = document.getElementById('client-date').value;
+                if (newDate && newDate !== c.startDate) {
+                    c.startDate = newDate;
+                    c.endDate = getNextMonthDate(newDate, c.duration);
+                    if (c.installments) {
+                        c.installments.forEach((inst, index) => {
+                            inst.date = getNextMonthDate(newDate, index + 1);
+                        });
+                    }
+                }
                 if (!isNaN(manualMora)) {
                     c.customMora = manualMora;
                 } else {
@@ -535,7 +546,7 @@ window.editClient = function(clientId) {
     }
 
     // Deshabilitar campos financieros en modo edición
-    document.getElementById('client-date').disabled = true;
+    document.getElementById('client-date').disabled = !config.allowEditFinancials;
     document.getElementById('client-duration').disabled = true;
     document.getElementById('client-amount').disabled = true;
     
