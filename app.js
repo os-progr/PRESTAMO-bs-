@@ -454,14 +454,40 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                 }
                 
                 const newDate = document.getElementById('client-date').value;
+                const newDuration = parseInt(document.getElementById('client-duration').value);
+                const newAmount = parseFloat(document.getElementById('client-amount').value);
+                
+                let needsRegen = false;
                 if (newDate && newDate !== c.startDate) {
                     c.startDate = newDate;
                     c.endDate = getNextMonthDate(newDate, c.duration);
-                    if (c.installments) {
-                        c.installments.forEach((inst, index) => {
-                            inst.date = getNextMonthDate(newDate, index + 1);
-                        });
-                    }
+                    needsRegen = true;
+                }
+                if (newDuration && newDuration !== parseInt(c.duration)) {
+                    c.duration = newDuration;
+                    c.endDate = getNextMonthDate(c.startDate, newDuration);
+                    needsRegen = true;
+                }
+                if (newAmount && newAmount !== c.amount) {
+                    c.amount = newAmount;
+                    c.balance = newAmount; // Reset balance to new amount
+                    needsRegen = true;
+                }
+
+                if (needsRegen && c.installments) {
+                    // Generate a fresh set of installments
+                    const newInstalls = generateInstallments(c.startDate, c.amount, c.duration, c.interest, true);
+                    // Overlay any already paid installments
+                    newInstalls.forEach((newInst, idx) => {
+                        const oldInst = c.installments[idx];
+                        if (oldInst && oldInst.status === 'Pagado') {
+                            newInst.status = 'Pagado';
+                            newInst.paidAmount = oldInst.paidAmount;
+                            newInst.penalty = oldInst.penalty;
+                            newInst.paymentDate = oldInst.paymentDate;
+                        }
+                    });
+                    c.installments = newInstalls;
                 }
                 if (!isNaN(manualMora)) {
                     c.customMora = manualMora;
@@ -545,10 +571,10 @@ window.editClient = function(clientId) {
         }
     }
 
-    // Deshabilitar campos financieros en modo edición
+    // Deshabilitar campos financieros en modo edición a menos que esté permitido en config
     document.getElementById('client-date').disabled = !config.allowEditFinancials;
-    document.getElementById('client-duration').disabled = true;
-    document.getElementById('client-amount').disabled = true;
+    document.getElementById('client-duration').disabled = !config.allowEditFinancials;
+    document.getElementById('client-amount').disabled = !config.allowEditFinancials;
     
     document.getElementById('modal-new-client').style.display = 'flex';
 };
