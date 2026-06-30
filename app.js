@@ -571,10 +571,9 @@ window.editClient = function(clientId) {
         }
     }
 
-    // Deshabilitar campos financieros en modo edición a menos que esté permitido en config
-    document.getElementById('client-date').disabled = !config.allowEditFinancials;
-    document.getElementById('client-duration').disabled = !config.allowEditFinancials;
-    document.getElementById('client-amount').disabled = !config.allowEditFinancials;
+    document.getElementById('client-date').disabled = false;
+    document.getElementById('client-duration').disabled = false;
+    document.getElementById('client-amount').disabled = false;
     
     document.getElementById('modal-new-client').style.display = 'flex';
 };
