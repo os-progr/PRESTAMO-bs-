@@ -222,10 +222,19 @@ async function syncClientToSupabase(c) {
 async function loadClientsFromSupabase() {
     if (!supabaseClient) return;
     try {
-        const { data: supaClients, error } = await supabaseClient.from('clients').select('*, payments(*)');
+        const { data: supaClients, error } = await supabaseClient.from('clients').select('*');
         if (error) throw error;
         
+        const { data: supaPayments } = await supabaseClient.from('payments').select('*');
+        
         if (supaClients && supaClients.length > 0) {
+            // Unir pagos manualmente por si falla la foreign key en Supabase
+            if (supaPayments) {
+                supaClients.forEach(c => {
+                    c.payments = supaPayments.filter(p => p.clientId === c.id);
+                });
+            }
+            
             clients = supaClients.map(mapSupabaseClientToApp);
             clientsLoadedFromSupabase = true;
             saveClientsData(); // Guardar copia local por si acaso
