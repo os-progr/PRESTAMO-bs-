@@ -278,6 +278,17 @@ function getInstallmentTotal(installment, capital) {
     return installment.expectedInterest + installment.penalty + (installment.isFinal ? capital : 0) - installment.paidAmount;
 }
 
+function updateClientBalance(client) {
+    let total = 0;
+    if (client.installments) {
+        client.installments.forEach(i => {
+            const exp = getInstallmentTotal(i, client.amount);
+            if (exp > 0) total += exp;
+        });
+    }
+    client.balance = total;
+}
+
 function checkMoras() {
     let changed = false;
     const today = new Date().toISOString().split('T')[0]; 
@@ -663,29 +674,6 @@ document.getElementById('form-payment').addEventListener('submit', (e) => {
     if (!client.payments) client.payments = [];
     client.payments.push(newPayment);
     
-    // Sincronizar pago a Supabase si está disponible
-    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        supabaseClient.from('payments').insert([{
-            id: paymentId,
-            clientId: client.id,
-            amount: amountPaid,
-            date: new Date().toISOString(),
-            paymentType: 'abono'
-        }]).then(({error}) => {
-            if (error) console.error("Error guardando pago en Supabase:", error);
-        });
-        
-        // Actualizar estado del cliente en Supabase si cambió
-        const expected = getInstallmentTotal(inst, client.amount);
-        let updatedStatus = client.status;
-        if (expected <= 0.01) {
-            updatedStatus = 'Al Día';
-            const next = getCurrentInstallment(client);
-            if (!next) updatedStatus = 'Liquidado';
-        }
-        supabaseClient.from('clients').update({ status: updatedStatus }).eq('id', client.id).then();
-    }
-    
     const expected = getInstallmentTotal(inst, client.amount);
     
     if (expected <= 0.01) {
@@ -702,6 +690,29 @@ document.getElementById('form-payment').addEventListener('submit', (e) => {
         }
     } else {
         alert('Abono parcial registrado. Falta cubrir: ' + formatCurrency(expected));
+    }
+    
+    updateClientBalance(client);
+    
+    // Sincronizar pago a Supabase si está disponible
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        supabaseClient.from('payments').insert([{
+            id: paymentId,
+            clientId: client.id,
+            amount: amountPaid,
+            date: new Date().toISOString(),
+            paymentType: 'abono'
+        }]).then(({error}) => {
+            if (error) console.error("Error guardando pago en Supabase:", error);
+        });
+        
+        if (typeof syncClientToSupabase === 'function') {
+            syncClientToSupabase(client);
+        } else {
+            const isLiquidado = client.status === 'Liquidado' || client.balance <= 0;
+            const mappedStatus = isLiquidado ? 'Pagado' : (client.status === 'Al Día' ? 'Pendiente' : client.status);
+            supabaseClient.from('clients').update({ status: mappedStatus, remainingBalance: client.balance }).eq('id', client.id).then();
+        }
     }
     
     saveClientsData();
