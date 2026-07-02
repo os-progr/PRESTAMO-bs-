@@ -135,20 +135,36 @@ function mapSupabaseClientToApp(row) {
     // Generar cuotas si no existen en la BD (para adaptación)
     const installs = generateInstallments(date, parseFloat(row.amount || 0), duration, monthlyRateStr, true);
     
-    // Si el cliente ya pagó todo en la BD antigua, marcamos todas sus cuotas como Pagadas
-    if (isLiquidado) {
-        installs.forEach(inst => {
+    const payments = (row.payments || []).map(p => ({
+        id: p.id || ('PAY-' + Date.now().toString().slice(-6) + Math.floor(Math.random()*1000)),
+        amount: parseFloat(p.amount),
+        date: p.date,
+        paymentType: p.paymentType || 'abono'
+    }));
+
+    // Distribuir el monto total pagado en las cuotas para recuperar abonos parciales
+    let totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    
+    installs.forEach(inst => {
+        let expectedForInst = inst.expectedInterest + (inst.isFinal ? parseFloat(row.amount || 0) : 0);
+        if (isLiquidado) {
             inst.status = 'Pagado';
-            inst.paidAmount = inst.expectedInterest + (inst.isFinal ? parseFloat(row.amount || 0) : 0);
-        });
-    } else {
-        // Marcar cuotas como pagadas basado en interestPaidCount
-        const paidCount = parseInt(row.interestPaidCount || 0);
-        for(let i = 0; i < paidCount && i < installs.length; i++) {
-            installs[i].status = 'Pagado';
-            installs[i].paidAmount = installs[i].expectedInterest;
+            inst.paidAmount = expectedForInst;
+        } else {
+            if (totalPaid >= expectedForInst) {
+                inst.status = 'Pagado';
+                inst.paidAmount = expectedForInst;
+                totalPaid -= expectedForInst;
+            } else if (totalPaid > 0) {
+                inst.status = 'Pendiente';
+                inst.paidAmount = totalPaid;
+                totalPaid = 0;
+            } else {
+                inst.status = 'Pendiente';
+                inst.paidAmount = 0;
+            }
         }
-    }
+    });
 
     return {
         id: row.id,
@@ -167,12 +183,7 @@ function mapSupabaseClientToApp(row) {
         status: finalStatus,
         lastPenaltyDate: null,
         installments: installs,
-        payments: (row.payments || []).map(p => ({
-            id: p.id || ('PAY-' + Date.now().toString().slice(-6) + Math.floor(Math.random()*1000)),
-            amount: parseFloat(p.amount),
-            date: p.date,
-            paymentType: p.paymentType || 'abono'
-        }))
+        payments: payments
     };
 }
 
@@ -191,6 +202,7 @@ function mapAppClientToSupabase(c) {
         remainingBalance: c.balance,
         notes: c.notes,
         status: mappedStatus,
+        interestPaidCount: c.installments ? c.installments.filter(i => i.status === 'Pagado').length : 0,
         date: new Date().toISOString()
     };
 }
@@ -228,20 +240,7 @@ async function loadClientsFromSupabase() {
 
 // Fallback load local clients if Supabase takes too long or fails
 let rawClients = JSON.parse(localStorage.getItem(CLIENTS_KEY)) || [];
-clients = rawClients.map(c => {
-    if (!c.installments) {
-        c.installments = [{
-            date: c.endDate,
-            expectedInterest: 0,
-            penalty: 0,
-            status: c.status === 'Liquidado' ? 'Pagado' : 'Pendiente',
-            isFinal: true,
-            paidAmount: c.status === 'Liquidado' ? c.balance : 0
-        }];
-        c.balance = c.amount; 
-    }
-    return c;
-});
+clients = rawClients;
 
 function getNextMonthDate(startDate, monthsToAdd) {
     const date = new Date(startDate);
@@ -1224,15 +1223,8 @@ function renderResumenTable(filterStart, filterEnd) {
         filteredClients = filteredClients.filter(c => c.name.toLowerCase().includes(searchTerm) || c.dni.includes(searchTerm));
     }
     
-    // Sort them to match the PDF order
-    const orderDNI = ['42476659','75946630','81269550','73665595','61305935','75534038','48273908','60299905','07642812','60472454','76628263'];
-    filteredClients.sort((a,b) => {
-        let ia = orderDNI.indexOf(a.dni);
-        let ib = orderDNI.indexOf(b.dni);
-        if(ia===-1) ia=99;
-        if(ib===-1) ib=99;
-        return ia - ib;
-    });
+    // Sort by start date as a standard fallback
+    filteredClients.sort((a,b) => (a.startDate > b.startDate) ? 1 : -1);
 
     let html = '';
     
@@ -1286,10 +1278,6 @@ function renderResumenTable(filterStart, filterEnd) {
         if (c.customMora !== undefined) {
             clientMora = c.customMora;
         }
-        
-        // Exact overrides for specific status matching the PDF (Mora value relies on logic above now)
-        if (c.dni === '60299905') { currentState = 'Acuerdo Pago'; badgeClass = 'badge-acuerdo'; }
-        if (c.dni === '61305935') { currentState = 'Vencido Hoy'; badgeClass = 'badge-vencido'; }
 
         sumCapital += c.amount;
         sumCuotaInt += cuotaInt;
