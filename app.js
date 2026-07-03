@@ -1010,7 +1010,10 @@ window.viewCronograma = function(clientId) {
                 <td style="padding: 10px; color: var(--text-muted);">${p.id}</td>
                 <td style="padding: 10px; color: var(--success); display:flex; justify-content:space-between; align-items:center;">
                     ${formatCurrency(p.amount)}
-                    <button class="icon-btn small" onclick="sendWhatsAppTicket('${c.id}', '${p.id}')" title="Enviar Ticket por WhatsApp"><i class="ph ph-whatsapp-logo"></i></button>
+                    <div>
+                        <button class="icon-btn small" onclick="sendWhatsAppTicket('${c.id}', '${p.id}')" title="Enviar Ticket por WhatsApp"><i class="ph ph-whatsapp-logo"></i></button>
+                        <button class="icon-btn small" onclick="deletePayment('${c.id}', '${p.id}')" title="Eliminar Abono" style="margin-left: 4px; color: var(--danger);"><i class="ph ph-trash"></i></button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -1034,6 +1037,75 @@ window.sendWhatsAppTicket = function(clientId, paymentId) {
                
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
+};
+
+window.deletePayment = async function(clientId, paymentId) {
+    if(!confirm('¿Estás seguro de que deseas eliminar este abono? El sistema recalculará automáticamente la deuda.')) return;
+    
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c || !c.payments) return;
+    
+    const p = c.payments.find(p => p.id === paymentId);
+    if (!p) return;
+    
+    // Delete from Supabase
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            await supabaseClient.from('payments').delete().eq('id', paymentId);
+        } catch (e) {
+            console.error('Error deleting payment in Supabase', e);
+        }
+    }
+    
+    // Remove from local array
+    c.payments = c.payments.filter(pay => pay.id !== paymentId);
+    
+    // Reset paid amounts on all installments
+    if (c.installments) {
+        c.installments.forEach(inst => {
+            inst.paidAmount = 0;
+            inst.status = 'Pendiente';
+        });
+        
+        // Redistribute totalPaid over installments
+        let totalPaid = c.payments.reduce((sum, p) => sum + p.amount, 0);
+        c.installments.forEach(inst => {
+            let expectedForInst = inst.expectedInterest + (inst.penalty || 0) + (inst.isFinal ? c.amount : 0);
+            if (totalPaid >= expectedForInst) {
+                inst.status = 'Pagado';
+                inst.paidAmount = expectedForInst;
+                totalPaid -= expectedForInst;
+            } else {
+                inst.status = 'Pendiente';
+                inst.paidAmount = Math.max(0, totalPaid);
+                totalPaid = 0;
+            }
+        });
+        
+        // Determine overall status
+        const pendingInsts = c.installments.filter(i => i.status !== 'Pagado');
+        if (pendingInsts.length === 0) {
+            c.status = 'Liquidado';
+        } else {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const hasMora = pendingInsts.some(i => new Date(i.date) < today);
+            c.status = hasMora ? 'En Mora' : 'Al Día';
+        }
+    }
+    
+    updateClientBalance(c);
+    saveClientsData();
+    
+    if (typeof syncClientToSupabase === 'function') {
+        syncClientToSupabase(c);
+    }
+    
+    renderAllTables();
+    renderChart();
+    
+    document.getElementById('modal-cronograma').style.display = 'none';
+    alert('Abono eliminado y saldo recalculado exitosamente.');
 };
 
 function renderDashboardTable() {
