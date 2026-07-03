@@ -132,8 +132,27 @@ function mapSupabaseClientToApp(row) {
     // Calculate monthly interest rate from row or fallback to config * 30
     const monthlyRateStr = row.interest ? (row.interest / 100) : (config.interesDiario / 100) * 30;
     
+    // Extract META
+    let penalties = [];
+    let lastPenaltyDate = null;
+    let cleanNotes = row.notes || '';
+    const metaMatch = cleanNotes.match(/<!--META:(.*?)-->/);
+    if (metaMatch) {
+        try {
+            const metaObj = JSON.parse(metaMatch[1]);
+            penalties = metaObj.p || [];
+            lastPenaltyDate = metaObj.l || null;
+            cleanNotes = cleanNotes.replace(/<!--META:.*?-->/g, '').trim();
+        } catch(e) {}
+    }
+
     // Generar cuotas si no existen en la BD (para adaptación)
     const installs = generateInstallments(date, parseFloat(row.amount || 0), duration, monthlyRateStr, true);
+    
+    // Apply META penalties
+    installs.forEach((inst, idx) => {
+        if (penalties[idx]) inst.penalty = penalties[idx];
+    });
     
     const payments = (row.payments || []).map(p => ({
         id: p.id || ('PAY-' + Date.now().toString().slice(-6) + Math.floor(Math.random()*1000)),
@@ -146,7 +165,7 @@ function mapSupabaseClientToApp(row) {
     let totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     
     installs.forEach(inst => {
-        let expectedForInst = inst.expectedInterest + (inst.isFinal ? parseFloat(row.amount || 0) : 0);
+        let expectedForInst = inst.expectedInterest + inst.penalty + (inst.isFinal ? parseFloat(row.amount || 0) : 0);
         if (isLiquidado) {
             inst.status = 'Pagado';
             inst.paidAmount = expectedForInst;
@@ -179,9 +198,9 @@ function mapSupabaseClientToApp(row) {
         duration: duration,
         amount: parseFloat(row.amount || 0),
         balance: parseFloat(row.remainingBalance || 0),
-        notes: row.notes || '',
+        notes: cleanNotes,
         status: finalStatus,
-        lastPenaltyDate: null,
+        lastPenaltyDate: lastPenaltyDate,
         installments: installs,
         payments: payments
     };
@@ -190,6 +209,16 @@ function mapSupabaseClientToApp(row) {
 function mapAppClientToSupabase(c) {
     const isLiquidado = c.status === 'Liquidado' || c.balance <= 0;
     const mappedStatus = isLiquidado ? 'Pagado' : (c.status === 'Al Día' ? 'Pendiente' : c.status);
+    
+    // Inject META
+    const penalties = c.installments ? c.installments.map(i => i.penalty || 0) : [];
+    const metaObj = {
+        p: penalties,
+        l: c.lastPenaltyDate || null
+    };
+    const cleanNotes = (c.notes || '').replace(/<!--META:.*?-->/g, '').trim();
+    const newNotes = cleanNotes + (Object.keys(metaObj).length > 0 ? ` <!--META:${JSON.stringify(metaObj)}-->` : '');
+    
     return {
         id: c.id,
         name: c.name,
@@ -200,7 +229,7 @@ function mapAppClientToSupabase(c) {
         term: c.duration,
         amount: c.amount,
         remainingBalance: c.balance,
-        notes: c.notes,
+        notes: newNotes,
         status: mappedStatus,
         interestPaidCount: c.installments ? c.installments.filter(i => i.status === 'Pagado').length : 0,
         date: new Date().toISOString()
@@ -322,6 +351,7 @@ function checkMoras() {
                     currentInst.penalty = c.customMora;
                     c.lastPenaltyDate = today;
                     changed = true;
+                    updateClientBalance(c);
                 } else {
                     if (!c.lastPenaltyDate) c.lastPenaltyDate = currentInst.date;
                     
@@ -337,6 +367,7 @@ function checkMoras() {
                         }
                         c.lastPenaltyDate = today;
                         changed = true;
+                        updateClientBalance(c);
                     }
                 }
             }
@@ -547,6 +578,7 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                 }
             }
             
+            updateClientBalance(c);
             saveClientsData();
             if (c && typeof syncClientToSupabase === 'function') {
                 syncClientToSupabase(c);
@@ -576,6 +608,7 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
             };
             clients.push(newClient);
             
+            updateClientBalance(newClient);
             saveClientsData();
             if (typeof syncClientToSupabase === 'function') {
                 syncClientToSupabase(newClient);
@@ -880,11 +913,7 @@ window.togglePublic = async function(clientId) {
     }
     
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        try {
-            await supabaseClient.from('clients').update({ notes: c.notes }).eq('id', c.id);
-        } catch(e) {
-            console.error('Error syncing public status', e);
-        }
+        syncClientToSupabase(c);
     }
     saveClientsData();
     renderAllTables();
