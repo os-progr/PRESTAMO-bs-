@@ -854,7 +854,7 @@ function renderAllTables() {
 function getStatusBadge(status) {
     if(status === 'Al Día') return '<span class="status-badge success">Al Día</span>';
     if(status === 'En Mora') return '<span class="status-badge danger">En Mora</span>';
-    if(status === 'En Proceso') return '<span class="status-badge info">En Proceso</span>';
+    if(status === 'En Proceso' || status === 'Al Día') return '<span class="status-badge info">Al Día</span>';
     if(status === 'Liquidado') return '<span class="status-badge success">Liquidado</span>';
     return `<span class="status-badge info">${status}</span>`;
 }
@@ -1060,7 +1060,7 @@ function renderSociosTable() {
     const tbody = document.getElementById('table-socios-body');
     if (!tbody) return;
     
-    let socios = getSortedList(filterClients(clients.filter(c => c.status === 'En Proceso' || c.status === 'En Mora')));
+    let socios = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado')));
     
     const searchTerm = (document.getElementById('search-socios')?.value || '').toLowerCase();
     if (searchTerm) {
