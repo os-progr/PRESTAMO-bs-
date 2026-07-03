@@ -251,16 +251,24 @@ async function syncClientToSupabase(c) {
 async function loadClientsFromSupabase() {
     if (!supabaseClient) return;
     try {
-        const { data: supaClients, error } = await supabaseClient.from('clients').select('*');
+        const { data: supaClients, error } = await supabaseClient.from('clients').select('*, payments(*)');
         if (error) throw error;
         
-        const { data: supaPayments } = await supabaseClient.from('payments').select('*');
+        let supaPayments = null;
+        try {
+            const { data } = await supabaseClient.from('payments').select('*');
+            supaPayments = data;
+        } catch(err) {
+            console.warn('Separated payment fetch failed (RLS maybe):', err);
+        }
         
         if (supaClients && supaClients.length > 0) {
-            // Unir pagos manualmente por si falla la foreign key en Supabase
+            // Unir pagos manualmente si la relación devolvió vacío y el fetch separado funcionó
             if (supaPayments) {
                 supaClients.forEach(c => {
-                    c.payments = supaPayments.filter(p => p.clientId === c.id);
+                    if (!c.payments || c.payments.length === 0) {
+                        c.payments = supaPayments.filter(p => p.clientId === c.id);
+                    }
                 });
             }
             
