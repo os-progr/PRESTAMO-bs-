@@ -877,11 +877,73 @@ window.markAsPaid = function(clientId) {
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
     client.status = 'Liquidado';
-    client.installments.forEach(i => i.status = 'Pagado');
+    client.balance = 0;
+    if (client.installments) {
+        client.installments.forEach(i => i.status = 'Pagado');
+    }
     saveClientsData();
+    
+    if (typeof syncClientToSupabase === 'function') {
+        syncClientToSupabase(client);
+    }
+    
     renderAllTables();
     renderChart();
 }
+
+window.undoLiquidado = function(clientId) {
+    if(!confirm('¿Restaurar este cliente a estado activo?')) return;
+    const c = clients.find(cl => cl.id === clientId);
+    if (!c) return;
+    
+    if (c.installments) {
+        c.installments.forEach(inst => {
+            inst.paidAmount = 0;
+            inst.status = 'Pendiente';
+        });
+        
+        let totalPaid = (c.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        c.installments.forEach(inst => {
+            let expectedForInst = inst.expectedInterest + (inst.penalty || 0) + (inst.isFinal ? c.amount : 0);
+            if (totalPaid >= expectedForInst) {
+                inst.status = 'Pagado';
+                inst.paidAmount = expectedForInst;
+                totalPaid -= expectedForInst;
+            } else {
+                inst.status = 'Pendiente';
+                inst.paidAmount = Math.max(0, totalPaid);
+                totalPaid = 0;
+            }
+        });
+        
+        const pendingInsts = c.installments.filter(i => i.status !== 'Pagado');
+        if (pendingInsts.length === 0) {
+            c.status = 'Liquidado';
+            c.balance = 0;
+            alert('El cliente ya tiene abonos suficientes para estar liquidado. No se puede restaurar.');
+            return;
+        } else {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const hasMora = pendingInsts.some(i => new Date(i.date) < today);
+            c.status = hasMora ? 'En Mora' : 'Al Día';
+        }
+    } else {
+        c.status = 'Al Día';
+    }
+    
+    updateClientBalance(c);
+    
+    if (typeof syncClientToSupabase === 'function') {
+        syncClientToSupabase(c);
+    }
+    
+    saveClientsData();
+    renderAllTables();
+    renderChart();
+    
+    alert('Cliente restaurado correctamente.');
+};
 
 function renderAllTables() {
     renderDashboardTable();
@@ -1215,6 +1277,7 @@ function renderHistoryTable() {
             <td>${c.endDate}</td>
             <td>${getStatusBadge(c.status)}</td>
             <td style="display: flex; gap: 4px; justify-content: flex-end;">
+                <button class="icon-btn small" onclick="undoLiquidado('${c.id}')" title="Restaurar a Activo"><i class="ph ph-arrow-u-up-left"></i></button>
                 <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
                 <button class="icon-btn small" onclick="deleteClient('${c.id}')" title="Eliminar del Historial"><i class="ph ph-trash"></i></button>
             </td>
