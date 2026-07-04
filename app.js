@@ -157,7 +157,7 @@ if (!config.whatsappName) config.whatsappName = 'Juan David Puclla Quispe';
 
 function mapSupabaseClientToApp(row) {
     const duration = row.term || 1;
-    const date = row.startDate || row.date || new Date().toISOString().split('T')[0];
+    const date = row.startDate || row.date || getLocalDateString();
     
     // Función auxiliar para iniciales
     function getInits(n) {
@@ -376,7 +376,7 @@ function updateClientBalance(client) {
 
 function checkMoras() {
     let changed = false;
-    const today = new Date().toISOString().split('T')[0]; 
+    const today = getLocalDateString();
     const todayTime = new Date(today).getTime();
     
     clients.forEach(c => {
@@ -882,7 +882,7 @@ window.notifyWhatsApp = function(clientId) {
     const cuotaText = currentIndex > 0 ? `(Cuota ${currentIndex} de ${totalInst})` : '';
 
     let phone = client.whatsapp.replace(/[^0-9]/g, '');
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const isToday = inst && inst.date === today;
     
     const hour = new Date().getHours();
@@ -1408,24 +1408,47 @@ function renderAlerts() {
         const diffDays = Math.round((endDate - today) / (1000 * 60 * 60 * 24));
         const expected = getInstallmentTotal(inst, c.amount);
 
+        // Check if final installment is due or past due
+        const finalInst = c.installments[c.installments.length - 1];
+        const isFinalDue = finalInst && finalInst.status !== 'Pagado' && finalInst.date <= getLocalDateString();
+        
+        // Calculate total amount due up to today
+        let totalDue = 0;
+        let daysLate = 0;
+        const todayStr = getLocalDateString();
+        
+        c.installments.forEach(i => {
+            if (i.status !== 'Pagado' && i.date <= todayStr) {
+                totalDue += getInstallmentTotal(i, c.amount);
+            }
+        });
+        
+        // If there's an amount due today or in the past, or if we are about to be due
+        if (totalDue === 0) {
+            // Not due today, but might be due in <= 3 days
+            totalDue = expected; // fallback to the upcoming installment amount
+        }
+
         if (c.status === 'En Mora') {
+            let title = isFinalDue ? 'Préstamo Vencido (Final)' : 'Cuenta en Mora';
+            let icon = isFinalDue ? '<i class="ph ph-warning-octagon"></i>' : '<i class="ph ph-warning-circle"></i>';
             alertsHtml += `
                 <div class="alert-item" style="border-left: 3px solid var(--danger);">
-                    <div class="alert-icon" style="color: var(--danger);"><i class="ph ph-warning-circle"></i></div>
+                    <div class="alert-icon" style="color: var(--danger);">${icon}</div>
                     <div class="alert-info">
-                        <strong style="color: var(--danger);">Cuenta en Mora</strong>
-                        <span>${c.name} - Cuota: ${formatCurrency(expected)}</span>
+                        <strong style="color: var(--danger);">${title}</strong>
+                        <span>${c.name} - Deuda Vencida: ${formatCurrency(totalDue)}</span>
                     </div>
                     <button class="icon-btn small" onclick="notifyWhatsApp('${c.id}')"><i class="ph ph-whatsapp-logo"></i></button>
                 </div>`;
         } else if (diffDays >= 0 && diffDays <= 3) {
-            let limitText = diffDays === 0 ? 'Vence HOY' : `Vence en ${diffDays} días`;
+            let title = isFinalDue ? 'Vence HOY (Final)' : (diffDays === 0 ? 'Vence HOY' : `Vence en ${diffDays} días`);
             alertsHtml += `
                 <div class="alert-item" style="border-left: 3px solid var(--warning);">
                     <div class="alert-icon" style="color: var(--warning);"><i class="ph ph-calendar-warning"></i></div>
                     <div class="alert-info">
-                        <strong style="color: var(--warning);">${limitText}</strong>
-                        <span>${c.name} - Cuota: ${formatCurrency(expected)}</span>
+                        <strong style="color: var(--warning);">${title}</strong>
+                        <span>${c.name} - Cuota: ${formatCurrency(totalDue)}</span>
                     </div>
                     <button class="icon-btn small" onclick="notifyWhatsApp('${c.id}')"><i class="ph ph-whatsapp-logo"></i></button>
                 </div>`;
@@ -1515,7 +1538,7 @@ function renderResumenTable(filterStart, filterEnd) {
     let sumCuotaInt = 0;
     let sumMora = 0;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
 
     filteredClients.forEach((c, index) => {
         const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
