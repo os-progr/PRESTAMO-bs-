@@ -637,7 +637,15 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
             
             editingClientId = null;
         } else {
-            const installs = generateInstallments(date, amount, duration, config.interesDiario);
+            const manualInt = parseFloat(document.getElementById('client-interest').value);
+            const manualMora = parseFloat(document.getElementById('client-custom-mora').value);
+            
+            const useRate = !isNaN(manualInt) ? manualInt : undefined;
+            const isMonthly = !isNaN(manualInt);
+            const effectiveRate = isMonthly ? (manualInt / 100) : config.interesDiario;
+            
+            const installs = generateInstallments(date, amount, duration, effectiveRate, isMonthly);
+            
             const newClient = {
                 id: generateId(),
                 name: name,
@@ -657,6 +665,14 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                 installments: installs,
                 payments: []
             };
+            
+            if (isMonthly) {
+                newClient.interest = manualInt;
+            }
+            if (!isNaN(manualMora)) {
+                newClient.customMora = manualMora;
+            }
+            
             clients.push(newClient);
             
             updateClientBalance(newClient);
