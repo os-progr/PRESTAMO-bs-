@@ -892,22 +892,30 @@ window.notifyWhatsApp = function(clientId) {
     let waMessage = '';
     let waIcon = '';
     let waColor = '';
+    let waBg = '';
+    let waBorder = '';
 
     if (client.status === 'En Mora' && inst) {
         waType = 'Aviso de Cobranza';
         waIcon = '🚨';
         waMessage = `Le informamos que su cuenta registra un atraso. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText}`;
         waColor = '#ef4444'; // Red
+        waBg = 'rgba(239, 68, 68, 0.15)';
+        waBorder = 'rgba(239, 68, 68, 0.3)';
     } else if (isToday && inst) {
         waType = 'Vencimiento Hoy';
         waIcon = '⚠️';
         waMessage = `Le recordamos que HOY es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. ${cuotaText}`;
         waColor = '#f59e0b'; // Amber
+        waBg = 'rgba(245, 158, 11, 0.15)';
+        waBorder = 'rgba(245, 158, 11, 0.3)';
     } else if (inst) {
         waType = 'Estado de Cuenta';
         waIcon = '💳';
         waMessage = `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. ${cuotaText}`;
         waColor = '#4ade80'; // Green
+        waBg = 'rgba(74, 222, 128, 0.15)';
+        waBorder = 'rgba(74, 222, 128, 0.3)';
     }
 
     const num = config.whatsappNum || '900 779 111';
@@ -916,7 +924,11 @@ window.notifyWhatsApp = function(clientId) {
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(introText)}`;
 
     if (inst) {
-        document.getElementById('wa-type').textContent = waType;
+        document.getElementById('wa-type-badge').textContent = waType;
+        document.getElementById('wa-type-badge').style.color = waColor;
+        document.getElementById('wa-type-badge').style.backgroundColor = waBg;
+        document.getElementById('wa-type-badge').style.borderColor = waBorder;
+        
         document.getElementById('wa-icon').textContent = waIcon;
         document.getElementById('wa-greeting').textContent = greeting;
         document.getElementById('wa-client').textContent = client.name;
