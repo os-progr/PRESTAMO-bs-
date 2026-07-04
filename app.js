@@ -856,7 +856,7 @@ window.generateTicket = function(client, amountPaid, balance, paymentId) {
     });
 };
 
-window.sendWhatsApp = function(clientId) {
+window.notifyWhatsApp = function(clientId) {
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
 
