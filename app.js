@@ -262,6 +262,9 @@ function mapAppClientToSupabase(c) {
         notes: newNotes,
         status: mappedStatus,
         interestPaidCount: c.installments ? c.installments.filter(i => i.status === 'Pagado').length : 0,
+        interest: c.interest || config.interesDiario || 2.5,
+        loanType: c.loanType || 'Diario',
+        totalToReturn: c.installments ? c.installments.reduce((sum, i) => sum + (i.expectedInterest || 0) + (i.penalty || 0), c.amount) : c.amount,
         date: new Date().toISOString()
     };
 }
