@@ -554,7 +554,7 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                 c.name = name;
                 c.initials = getInitials(name);
                 c.dni = document.getElementById('client-dni').value;
-                c.address = document.getElementById('client-address').value;
+                c.address = '';
                 c.whatsapp = document.getElementById('client-whatsapp').value;
                 c.phone2 = document.getElementById('client-phone2').value;
                 c.notes = document.getElementById('client-notes').value;
@@ -634,7 +634,7 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
                 name: name,
                 initials: getInitials(name),
                 dni: document.getElementById('client-dni').value,
-                address: document.getElementById('client-address').value,
+                address: '',
                 whatsapp: document.getElementById('client-whatsapp').value,
                 phone2: document.getElementById('client-phone2').value,
                 startDate: date,
@@ -686,7 +686,8 @@ window.editClient = function(clientId) {
     editingClientId = clientId;
     document.getElementById('client-name').value = c.name;
     document.getElementById('client-dni').value = c.dni;
-    document.getElementById('client-address').value = c.address || '';
+    const addrEl = document.getElementById('client-address');
+    if (addrEl) addrEl.value = c.address || '';
     document.getElementById('client-whatsapp').value = c.whatsapp;
     document.getElementById('client-phone2').value = c.phone2 || '';
     document.getElementById('client-date').value = c.startDate;
