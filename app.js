@@ -322,8 +322,8 @@ let rawClients = JSON.parse(localStorage.getItem(CLIENTS_KEY)) || [];
 clients = rawClients;
 
 function getNextMonthDate(startDate, monthsToAdd) {
-    const date = new Date(startDate + 'T12:00:00');
-    date.setDate(date.getDate() + (parseInt(monthsToAdd) * 30));
+    const date = new Date(startDate + 'T00:00:00Z');
+    date.setUTCDate(date.getUTCDate() + (parseInt(monthsToAdd) * 30));
     return date.toISOString().split('T')[0];
 }
 
