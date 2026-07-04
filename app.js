@@ -1600,9 +1600,11 @@ function renderResumenTable(filterStart, filterEnd) {
         if (pendingInst.length > 0) {
             let nextInst = pendingInst[0];
             f_venc = nextInst.date;
-            cuotaInt = nextInst.expectedInterest;
             
-            pendingInst.forEach(i => clientMora += i.penalty);
+            pendingInst.forEach(i => {
+                clientMora += (i.penalty || 0);
+                cuotaInt += (i.expectedInterest || 0);
+            });
 
             if (nextInst.date === todayStr) {
                 currentState = 'Vencido Hoy';
@@ -1619,11 +1621,6 @@ function renderResumenTable(filterStart, filterEnd) {
                 currentState = c_p > 0 ? 'Al día' : 'Vigente';
                 badgeClass = c_p > 0 ? 'badge-aldia' : 'badge-vigente';
             }
-        }
-        
-        // Use manual override if present
-        if (c.customMora !== undefined) {
-            clientMora = c.customMora;
         }
 
         sumCapital += c.amount;
