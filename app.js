@@ -45,6 +45,13 @@ let rendimientoChartInstance = null;
 let clients = [];
 let clientsLoadedFromSupabase = false;
 let editingClientId = null;
+let currentChart = null;
+
+function getLocalDateString() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+}
 let currentPaymentClientId = null;
 let dirHandle = null;
 let currentSortKey = null;
@@ -322,8 +329,8 @@ let rawClients = JSON.parse(localStorage.getItem(CLIENTS_KEY)) || [];
 clients = rawClients;
 
 function getNextMonthDate(startDate, monthsToAdd) {
-    const date = new Date(startDate + 'T00:00:00Z');
-    date.setUTCDate(date.getUTCDate() + (parseInt(monthsToAdd) * 30));
+    const date = new Date(startDate + 'T12:00:00');
+    date.setMonth(date.getMonth() + parseInt(monthsToAdd));
     return date.toISOString().split('T')[0];
 }
 
