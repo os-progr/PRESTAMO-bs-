@@ -8,6 +8,36 @@ if (window.supabase) {
 
 // Data Storage Keys
 const CLIENTS_KEY = 'qoan_clients';
+window.showToast = function(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `glass-card toast-${type}`;
+    toast.style.padding = '12px 20px';
+    toast.style.borderLeft = `4px solid ${type === 'success' ? 'var(--success)' : (type === 'error' ? 'var(--danger)' : 'var(--primary)')}`;
+    toast.style.color = 'white';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '8px';
+    toast.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
+    toast.style.animation = 'slideIn 0.3s ease forwards';
+    toast.style.transition = 'opacity 0.3s ease';
+    
+    const icon = type === 'success' ? '<i class="ph ph-check-circle" style="color:var(--success); font-size:1.2rem;"></i>' : 
+                 (type === 'error' ? '<i class="ph ph-warning-circle" style="color:var(--danger); font-size:1.2rem;"></i>' : 
+                 '<i class="ph ph-info" style="color:var(--primary); font-size:1.2rem;"></i>');
+                 
+    toast.innerHTML = `${icon} <span>${msg}</span>`;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+};
+
 const CONFIG_KEY = 'qoan_config';
 
 // Global Variables
@@ -87,7 +117,7 @@ window.selectDirectory = async function() {
         dirHandle = await window.showDirectoryPicker();
         await saveHandle(dirHandle);
         await autoSave();
-        alert('Carpeta vinculada exitosamente. El sistema hará copias de seguridad automáticas aquí.');
+        showToast('Carpeta vinculada exitosamente. El sistema hará copias de seguridad automáticas aquí.');
     } catch (e) {
         console.error('User cancelled or error', e);
     }
@@ -435,7 +465,8 @@ document.getElementById('form-config').addEventListener('submit', (e) => {
         allowEditFinancials: document.getElementById('config-allow-edit-financials').checked
     };
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    alert('Configuración guardada localmente.');
+    saveClientsData();
+    showToast('Configuración guardada localmente.');
     renderAllTables();
     renderChart();
 });
@@ -474,7 +505,7 @@ function getSortedList(list) {
 
 function exportToCSV() {
     if (clients.length === 0) {
-        alert("No hay datos para exportar.");
+        showToast("No hay datos para exportar.", "error");
         return;
     }
     const headers = ['ID', 'Nombre', 'DNI', 'WhatsApp', 'Fecha Inicio', 'Capital Original', 'Estado'];
@@ -626,7 +657,7 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
         document.getElementById('form-new-client').reset();
         document.getElementById('modal-new-client').style.display = 'none';
         
-        alert('Cliente guardado exitosamente.');
+        showToast('Cliente guardado exitosamente.');
         checkMoras(); 
         renderAllTables();
         renderChart();
@@ -733,12 +764,12 @@ document.getElementById('form-payment').addEventListener('submit', (e) => {
         const next = getCurrentInstallment(client);
         if (!next) {
             client.status = 'Liquidado';
-            alert('¡El cliente ha liquidado el préstamo por completo!');
+            showToast('¡El cliente ha liquidado el préstamo por completo!');
         } else {
-            alert('Cuota mensual pagada correctamente.');
+            showToast('Cuota mensual pagada correctamente.');
         }
     } else {
-        alert('Abono parcial registrado. Falta cubrir: ' + formatCurrency(expected));
+        showToast('Abono parcial registrado. Falta cubrir: ' + formatCurrency(expected), 'info');
     }
     
     updateClientBalance(client);
@@ -920,7 +951,7 @@ window.undoLiquidado = function(clientId) {
         if (pendingInsts.length === 0) {
             c.status = 'Liquidado';
             c.balance = 0;
-            alert('El cliente ya tiene abonos suficientes para estar liquidado. No se puede restaurar.');
+            showToast('El cliente ya tiene abonos suficientes para estar liquidado. No se puede restaurar.', 'error');
             return;
         } else {
             const today = new Date();
@@ -942,7 +973,7 @@ window.undoLiquidado = function(clientId) {
     renderAllTables();
     renderChart();
     
-    alert('Cliente restaurado correctamente.');
+    showToast('Cliente restaurado correctamente.');
 };
 
 function renderAllTables() {
@@ -1167,7 +1198,7 @@ window.deletePayment = async function(clientId, paymentId) {
     renderChart();
     
     document.getElementById('modal-cronograma').style.display = 'none';
-    alert('Abono eliminado y saldo recalculado exitosamente.');
+    showToast('Abono eliminado y saldo recalculado exitosamente.');
 };
 
 function renderDashboardTable() {
