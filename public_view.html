@@ -131,6 +131,29 @@
             }
         }
 
+        function formatRelativeDate(dateString) {
+            if (!dateString) return '-';
+            try {
+                const dateStr = dateString.split('T')[0];
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    const target = new Date(parts[0], parts[1] - 1, parts[2]);
+                    const now = new Date();
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    
+                    const diffTime = today - target;
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                    if (diffDays === 0) return 'Hoy';
+                    if (diffDays === 1) return 'Ayer';
+                    if (diffDays === 2) return 'Anteayer';
+                }
+                return dateStr;
+            } catch(e) {
+                return dateString.split('T')[0] || dateString;
+            }
+        }
+
         function renderTable(clients) {
             const tbody = document.getElementById('public-table-body');
             document.getElementById('loader').style.display = 'none';
@@ -145,15 +168,7 @@
                 const isLiquidado = (c.status === 'Pagado' || parseFloat(c.remainingBalance || 1) <= 0);
                 const finalStatus = isLiquidado ? 'Liquidado' : (c.status === 'Pendiente' ? 'Al Día' : (c.status || 'Al Día'));
                 
-                let dateDisplay = '-';
-                if (c.startDate || c.date) {
-                    try {
-                        const d = new Date(c.startDate || c.date);
-                        dateDisplay = d.toISOString().split('T')[0];
-                    } catch(e) {
-                        dateDisplay = c.startDate || c.date;
-                    }
-                }
+                let dateDisplay = formatRelativeDate(c.startDate || c.date);
 
                 return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
