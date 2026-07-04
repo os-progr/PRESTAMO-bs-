@@ -871,31 +871,43 @@ window.notifyWhatsApp = function(clientId) {
     let text = '';
     const num = config.whatsappNum || '900 779 111';
     const name = config.whatsappName || 'Juan David Puclla Quispe';
-    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n*IMPORTANTE:* Una vez realizado el pago, envía una captura de pantalla del voucher por este medio para registrar tu abono.`;
+    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n*IMPORTANTE:* Una vez realizado el pago, envíenos una captura del voucher por este medio. ¡Gracias por su puntualidad!`;
 
     const today = new Date().toISOString().split('T')[0];
     const isToday = inst && inst.date === today;
+    
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Buenos días' : (hour < 19 ? 'Buenas tardes' : 'Buenas noches');
+
+    function formatFancyDate(dString) {
+        if (!dString) return '';
+        const parts = dString.split('-');
+        if (parts.length !== 3) return dString;
+        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        return `${parseInt(parts[2], 10)} de ${months[parseInt(parts[1], 10) - 1]} de ${parts[0]}`;
+    }
+    const fancyDate = formatFancyDate(inst ? inst.date : '');
 
     if (client.status === 'En Mora' && inst) {
         text = `*AVISO URGENTE DE COBRANZA*\n\n` +
-               `Estimado/a *${client.name}*,\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `*Fecha de Corte:* ${inst.date}\n` +
-               `*Mora Acumulada a la fecha:* ${formatCurrency(inst.penalty)}\n` +
-               `*TOTAL A CANCELAR: ${formatCurrency(expected)}*\n\n` +
+               `${greeting}, *${client.name}*.\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `• *Fecha de Corte:* ${fancyDate}\n` +
+               `• *Mora Acumulada:* ${formatCurrency(inst.penalty)}\n` +
+               `• *TOTAL A CANCELAR:* ${formatCurrency(expected)}\n\n` +
                `_Recuerde que la mora incrementa diariamente._\n\n` +
                `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     } else if (isToday && inst) {
         text = `*RECORDATORIO DE PAGO - VENCE HOY*\n\n` +
-               `Hola *${client.name}*,\nLe recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos por mora y mantenga su crédito al día. ${cuotaText}\n\n` +
-               `*CUOTA ESPERADA: ${formatCurrency(expected)}*\n\n` +
+               `${greeting}, *${client.name}*.\nLe recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos por mora y mantenga su crédito al día. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `• *CUOTA ESPERADA:* ${formatCurrency(expected)}\n\n` +
                `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     } else if (inst) {
-        text = `*ESTADO DE CUENTA - PREVENTIVO*\n\n` +
-               `Hola *${client.name}*,\nEsperamos que se encuentre muy bien. Le enviamos un recordatorio amistoso sobre el próximo vencimiento de su cuota. ${cuotaText}\n\n` +
-               `*Fecha de Vencimiento:* ${inst.date}\n` +
-               `*CUOTA A PAGAR: ${formatCurrency(expected)}*\n\n` +
+        text = `*RECORDATORIO AMISTOSO DE PAGO*\n\n` +
+               `${greeting}, *${client.name}*.\nEsperamos que se encuentre muy bien. Le escribimos para recordarle que su próxima cuota está por vencer. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `• *Vencimiento:* ${fancyDate}\n` +
+               `• *Monto a Pagar:* ${formatCurrency(expected)}\n\n` +
                `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     }
