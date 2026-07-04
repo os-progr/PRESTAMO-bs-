@@ -871,35 +871,32 @@ window.notifyWhatsApp = function(clientId) {
     let text = '';
     const num = config.whatsappNum || '900 779 111';
     const name = config.whatsappName || 'Juan David Puclla Quispe';
-    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n📸 *IMPORTANTE:* Una vez realizado el pago, envía una captura de pantalla del voucher por este medio para registrar tu abono.`;
+    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n*IMPORTANTE:* Una vez realizado el pago, envía una captura de pantalla del voucher por este medio para registrar tu abono.`;
 
     const today = new Date().toISOString().split('T')[0];
     const isToday = inst && inst.date === today;
 
     if (client.status === 'En Mora' && inst) {
-        text = `🚨 *AVISO URGENTE DE COBRANZA* 🚨\n\n` +
-               `Estimado/a *${client.name}*,\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad.\n\n` +
-               `🔹 *Folio:* ${client.id} ${cuotaText ? `(${cuotaText})` : ''}\n` +
-               `📅 *Fecha de Corte:* ${inst.date}\n` +
-               `⚠️ *Mora Acumulada a la fecha:* ${formatCurrency(inst.penalty)}\n` +
-               `💰 *TOTAL A CANCELAR: ${formatCurrency(expected)}*\n\n` +
+        text = `*AVISO URGENTE DE COBRANZA*\n\n` +
+               `Estimado/a *${client.name}*,\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `*Fecha de Corte:* ${inst.date}\n` +
+               `*Mora Acumulada a la fecha:* ${formatCurrency(inst.penalty)}\n` +
+               `*TOTAL A CANCELAR: ${formatCurrency(expected)}*\n\n` +
                `_Recuerde que la mora incrementa diariamente._\n\n` +
-               `📲 *Instrucciones de Pago:*\n` +
+               `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     } else if (isToday && inst) {
-        text = `⚠️ *RECORDATORIO DE PAGO - VENCE HOY* ⚠️\n\n` +
+        text = `*RECORDATORIO DE PAGO - VENCE HOY*\n\n` +
                `Hola *${client.name}*,\nLe recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos por mora y mantenga su crédito al día. ${cuotaText}\n\n` +
-               `🔹 *Folio:* ${client.id}\n` +
-               `💰 *CUOTA ESPERADA: ${formatCurrency(expected)}*\n\n` +
-               `📲 *Instrucciones de Pago:*\n` +
+               `*CUOTA ESPERADA: ${formatCurrency(expected)}*\n\n` +
+               `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     } else if (inst) {
-        text = `💳 *ESTADO DE CUENTA - PREVENTIVO* 💳\n\n` +
+        text = `*ESTADO DE CUENTA - PREVENTIVO*\n\n` +
                `Hola *${client.name}*,\nEsperamos que se encuentre muy bien. Le enviamos un recordatorio amistoso sobre el próximo vencimiento de su cuota. ${cuotaText}\n\n` +
-               `🔹 *Folio:* ${client.id}\n` +
-               `🗓️ *Fecha de Vencimiento:* ${inst.date}\n` +
-               `💰 *CUOTA A PAGAR: ${formatCurrency(expected)}*\n\n` +
-               `📲 *Instrucciones de Pago:*\n` +
+               `*Fecha de Vencimiento:* ${inst.date}\n` +
+               `*CUOTA A PAGAR: ${formatCurrency(expected)}*\n\n` +
+               `*Instrucciones de Pago:*\n` +
                `${instrucciones}`;
     }
     
