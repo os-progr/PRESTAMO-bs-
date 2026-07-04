@@ -871,7 +871,7 @@ window.notifyWhatsApp = function(clientId) {
     let text = '';
     const num = config.whatsappNum || '900 779 111';
     const name = config.whatsappName || 'Juan David Puclla Quispe';
-    const instrucciones = `Por favor realiza el depósito o transferencia al número *${num}* (A nombre de: ${name}).\n\n*IMPORTANTE:* Una vez realizado el pago, envíenos una captura del voucher por este medio. ¡Gracias por su puntualidad!`;
+    const instrucciones = `Para su comodidad, puede realizar su pago mediante depósito o transferencia:\n\n*Cuenta / Número:* ${num}\n*Titular:* ${name}\n\n_Por favor, envíenos una foto o captura de pantalla de su voucher por este medio para validar su pago._\n\n¡Agradecemos mucho su confianza y puntualidad!`;
 
     const today = new Date().toISOString().split('T')[0];
     const isToday = inst && inst.date === today;
@@ -889,26 +889,48 @@ window.notifyWhatsApp = function(clientId) {
     const fancyDate = formatFancyDate(inst ? inst.date : '');
 
     if (client.status === 'En Mora' && inst) {
-        text = `*AVISO URGENTE DE COBRANZA*\n\n` +
-               `${greeting}, *${client.name}*.\nLe informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `• *Fecha de Corte:* ${fancyDate}\n` +
-               `• *Mora Acumulada:* ${formatCurrency(inst.penalty)}\n` +
-               `• *TOTAL A CANCELAR:* ${formatCurrency(expected)}\n\n` +
-               `_Recuerde que la mora incrementa diariamente._\n\n` +
-               `*Instrucciones de Pago:*\n` +
+        text = `===========================\n` +
+               `    *AVISO DE COBRANZA*\n` +
+               `===========================\n\n` +
+               `${greeting}, *${client.name}*.\n\n` +
+               `Le informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Cuidar su historial crediticio es muy importante, por favor regularice su situación a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `---------------------------\n` +
+               ` *DETALLE DEL ADEUDO*\n` +
+               `---------------------------\n` +
+               ` Fecha de Corte:  ${fancyDate}\n` +
+               ` Mora Acumulada:  ${formatCurrency(inst.penalty)}\n` +
+               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
+               `---------------------------\n` +
+               `_Nota: La mora se incrementa diariamente._\n\n` +
+               `*MÉTODOS DE PAGO:*\n` +
                `${instrucciones}`;
     } else if (isToday && inst) {
-        text = `*RECORDATORIO DE PAGO - VENCE HOY*\n\n` +
-               `${greeting}, *${client.name}*.\nLe recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos por mora y mantenga su crédito al día. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `• *CUOTA ESPERADA:* ${formatCurrency(expected)}\n\n` +
-               `*Instrucciones de Pago:*\n` +
+        text = `===========================\n` +
+               ` *VENCIMIENTO HOY*\n` +
+               `===========================\n\n` +
+               `${greeting}, *${client.name}*.\n\n` +
+               `Le recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `---------------------------\n` +
+               ` *RESUMEN DE CUOTA*\n` +
+               `---------------------------\n` +
+               ` Vencimiento:   Hoy\n` +
+               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
+               `---------------------------\n\n` +
+               `*MÉTODOS DE PAGO:*\n` +
                `${instrucciones}`;
     } else if (inst) {
-        text = `*RECORDATORIO AMISTOSO DE PAGO*\n\n` +
-               `${greeting}, *${client.name}*.\nEsperamos que se encuentre muy bien. Le escribimos para recordarle que su próxima cuota está por vencer. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `• *Vencimiento:* ${fancyDate}\n` +
-               `• *Monto a Pagar:* ${formatCurrency(expected)}\n\n` +
-               `*Instrucciones de Pago:*\n` +
+        text = `===========================\n` +
+               ` *RECORDATORIO AMISTOSO*\n` +
+               `===========================\n\n` +
+               `${greeting}, *${client.name}*.\n\n` +
+               `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
+               `---------------------------\n` +
+               ` *RESUMEN DE CUENTA*\n` +
+               `---------------------------\n` +
+               ` Vencimiento:   ${fancyDate}\n` +
+               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
+               `---------------------------\n\n` +
+               `*MÉTODOS DE PAGO:*\n` +
                `${instrucciones}`;
     }
     
