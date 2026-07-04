@@ -599,7 +599,9 @@ document.getElementById('form-new-client').addEventListener('submit', (e) => {
 
                     if (needsRegen && c.installments) {
                         // Generate a fresh set of installments
-                        const newInstalls = generateInstallments(c.startDate, c.amount, c.duration, c.interest, true);
+                        const useRate = c.interest !== undefined ? (c.interest / 100) : config.interesDiario;
+                        const isMonthly = c.interest !== undefined;
+                        const newInstalls = generateInstallments(c.startDate, c.amount, c.duration, useRate, isMonthly);
                         // Overlay any already paid installments
                         newInstalls.forEach((newInst, idx) => {
                             const oldInst = c.installments[idx];
