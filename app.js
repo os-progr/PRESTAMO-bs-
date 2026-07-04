@@ -856,23 +856,23 @@ window.generateTicket = function(client, amountPaid, balance, paymentId) {
     });
 };
 
-window.notifyWhatsApp = function(clientId) {
+window.sendWhatsApp = function(clientId) {
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
+
+    if (!client.whatsapp) {
+        alert('Este cliente no tiene número de WhatsApp registrado.');
+        return;
+    }
 
     const inst = getCurrentInstallment(client);
     const expected = inst ? getInstallmentTotal(inst, client.amount) : 0;
     
     const currentIndex = inst ? client.installments.indexOf(inst) + 1 : 0;
     const totalInst = client.installments.length;
-    const cuotaText = currentIndex > 0 ? `Te recordamos que esta es tu cuota ${currentIndex} de ${totalInst}.` : '';
+    const cuotaText = currentIndex > 0 ? `(Cuota ${currentIndex} de ${totalInst})` : '';
 
     let phone = client.whatsapp.replace(/[^0-9]/g, '');
-    let text = '';
-    const num = config.whatsappNum || '900 779 111';
-    const name = config.whatsappName || 'Juan David Puclla Quispe';
-    const instrucciones = `Para su comodidad, puede realizar su pago mediante depósito o transferencia:\n\n*Cuenta / Número:* ${num}\n*Titular:* ${name}\n\n_Por favor, envíenos una foto o captura de pantalla de su voucher por este medio para validar su pago._\n\n¡Agradecemos mucho su confianza y puntualidad!`;
-
     const today = new Date().toISOString().split('T')[0];
     const isToday = inst && inst.date === today;
     
@@ -888,54 +888,69 @@ window.notifyWhatsApp = function(clientId) {
     }
     const fancyDate = formatFancyDate(inst ? inst.date : '');
 
+    let waType = '';
+    let waMessage = '';
+    let waIcon = '';
+    let waColor = '';
+
     if (client.status === 'En Mora' && inst) {
-        text = `===========================\n` +
-               `    *AVISO DE COBRANZA*\n` +
-               `===========================\n\n` +
-               `${greeting}, *${client.name}*.\n\n` +
-               `Le informamos que su cuenta registra un *ATRASO* en el pago de su cuota. Cuidar su historial crediticio es muy importante, por favor regularice su situación a la brevedad. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `---------------------------\n` +
-               ` *DETALLE DEL ADEUDO*\n` +
-               `---------------------------\n` +
-               ` Fecha de Corte:  ${fancyDate}\n` +
-               ` Mora Acumulada:  ${formatCurrency(inst.penalty)}\n` +
-               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
-               `---------------------------\n` +
-               `_Nota: La mora se incrementa diariamente._\n\n` +
-               `*MÉTODOS DE PAGO:*\n` +
-               `${instrucciones}`;
+        waType = 'Aviso de Cobranza';
+        waIcon = '🚨';
+        waMessage = `Le informamos que su cuenta registra un atraso. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText}`;
+        waColor = '#ef4444'; // Red
     } else if (isToday && inst) {
-        text = `===========================\n` +
-               ` *VENCIMIENTO HOY*\n` +
-               `===========================\n\n` +
-               `${greeting}, *${client.name}*.\n\n` +
-               `Le recordamos que *HOY* es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `---------------------------\n` +
-               ` *RESUMEN DE CUOTA*\n` +
-               `---------------------------\n` +
-               ` Vencimiento:   Hoy\n` +
-               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
-               `---------------------------\n\n` +
-               `*MÉTODOS DE PAGO:*\n` +
-               `${instrucciones}`;
+        waType = 'Vencimiento Hoy';
+        waIcon = '⚠️';
+        waMessage = `Le recordamos que HOY es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. ${cuotaText}`;
+        waColor = '#f59e0b'; // Amber
     } else if (inst) {
-        text = `===========================\n` +
-               ` *RECORDATORIO AMISTOSO*\n` +
-               `===========================\n\n` +
-               `${greeting}, *${client.name}*.\n\n` +
-               `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. ${cuotaText ? `(${cuotaText})` : ''}\n\n` +
-               `---------------------------\n` +
-               ` *RESUMEN DE CUENTA*\n` +
-               `---------------------------\n` +
-               ` Vencimiento:   ${fancyDate}\n` +
-               ` *TOTAL A PAGAR:*  *${formatCurrency(expected)}*\n` +
-               `---------------------------\n\n` +
-               `*MÉTODOS DE PAGO:*\n` +
-               `${instrucciones}`;
+        waType = 'Estado de Cuenta';
+        waIcon = '💳';
+        waMessage = `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. ${cuotaText}`;
+        waColor = '#4ade80'; // Green
     }
-    
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+
+    const num = config.whatsappNum || '900 779 111';
+    const name = config.whatsappName || 'Juan David Puclla Quispe';
+    const introText = `${greeting}, *${client.name}*.\n\nLe envío el detalle de su cuenta en la imagen generada. 👇\n\n_(Por favor, adjunte la imagen descargada en este chat)_\n\n*Método de Pago:*\nCuenta: ${num}\nTitular: ${name}\n\nQuedamos a la espera de la foto de su voucher. ¡Gracias!`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(introText)}`;
+
+    if (inst) {
+        document.getElementById('wa-type').textContent = waType;
+        document.getElementById('wa-icon').textContent = waIcon;
+        document.getElementById('wa-greeting').textContent = greeting;
+        document.getElementById('wa-client').textContent = client.name;
+        document.getElementById('wa-message').textContent = waMessage;
+        document.getElementById('wa-date').textContent = fancyDate;
+        
+        const amountEl = document.getElementById('wa-amount');
+        amountEl.textContent = formatCurrency(expected);
+        amountEl.style.color = waColor;
+
+        const template = document.getElementById('wa-image-template');
+        template.style.top = '0';
+        template.style.left = '0';
+        template.style.zIndex = '-100';
+
+        // Add a small loading indicator or just rely on speed
+        html2canvas(template, { backgroundColor: null, scale: 2 }).then(canvas => {
+            template.style.top = '-9999px';
+            template.style.left = '-9999px';
+            
+            const link = document.createElement('a');
+            const safeName = client.name.replace(/\s+/g, '_');
+            link.download = `Estado_Cuenta_${safeName}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            // Open WhatsApp tab
+            setTimeout(() => {
+                window.open(url, '_blank');
+            }, 300);
+        });
+    } else {
+        window.open(url, '_blank');
+    }
 };
 
 window.markAsPaid = function(clientId) {

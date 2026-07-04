@@ -759,6 +759,44 @@
         </div>
     </div>
 
-    <script src="app.js?v=8"></script>
+    <!-- Hidden Template for WhatsApp Card Generation -->
+    <div id="wa-image-template" style="position: absolute; top: -9999px; left: -9999px; width: 400px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f8fafc; padding: 28px; box-sizing: border-box; font-family: 'Inter', sans-serif; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; margin-bottom: 20px;">
+            <div>
+                <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">QOAN<span style="color: #60a5fa;">Financial</span></div>
+                <div id="wa-type" style="font-size: 10px; color: #94a3b8; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">Estado de Cuenta</div>
+            </div>
+            <div id="wa-icon" style="font-size: 32px;">💳</div>
+        </div>
+        
+        <!-- Greeting -->
+        <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+            <span id="wa-greeting">Hola</span>, <strong id="wa-client" style="color: #ffffff;">Cliente</strong>.
+            <div id="wa-message" style="margin-top: 6px; font-size: 12px; line-height: 1.4; color: #94a3b8;">
+                Le recordamos que su próxima cuota está por vencer.
+            </div>
+        </div>
+
+        <!-- Details Card -->
+        <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-size: 12px; color: #94a3b8;">📅 Vencimiento</div>
+                <div id="wa-date" style="font-size: 13px; font-weight: 600;">25 de Julio</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 12px;">
+                <div style="font-size: 12px; color: #94a3b8;">💰 Total a Pagar</div>
+                <div id="wa-amount" style="font-size: 20px; font-weight: 800; color: #4ade80;">$500.00</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.4;">
+            Por favor envíe su voucher por este medio al realizar su pago.<br>
+            <strong style="color: #94a3b8;">¡Gracias por su puntualidad!</strong>
+        </div>
+    </div>
+
+    <script src="app.js?v=9"></script>
 </body>
 </html>
