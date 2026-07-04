@@ -923,21 +923,23 @@ window.notifyWhatsApp = function(clientId) {
     if (client.status === 'En Mora' && inst) {
         waType = 'Aviso de Cobranza';
         waIcon = '🚨';
-        waMessage = `Le informamos que su cuenta registra un atraso. Su historial crediticio es muy importante, por favor regularice su pago a la brevedad. ${cuotaText}`;
+        const missedText = getMissedInstallmentsText(client);
+        const specificMissed = missedText ? `${missedText}.` : `(Cuota ${currentIndex} de ${totalInst}).`;
+        waMessage = `Le informamos que su cuenta registra un atraso. Su historial crediticio es muy importante. ${specificMissed} Por favor regularice su pago a la brevedad.`;
         waColor = '#ef4444'; // Red
         waBg = 'rgba(239, 68, 68, 0.15)';
         waBorder = 'rgba(239, 68, 68, 0.3)';
     } else if (isToday && inst) {
         waType = 'Vencimiento Hoy';
         waIcon = '⚠️';
-        waMessage = `Le recordamos que HOY es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. ${cuotaText}`;
+        waMessage = `Le recordamos que HOY es la fecha límite para el pago de su cuota. Evite cargos adicionales por mora y mantenga su crédito al día. (Cuota ${currentIndex} de ${totalInst})`;
         waColor = '#f59e0b'; // Amber
         waBg = 'rgba(245, 158, 11, 0.15)';
         waBorder = 'rgba(245, 158, 11, 0.3)';
     } else if (inst) {
         waType = 'Estado de Cuenta';
         waIcon = '💳';
-        waMessage = `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. ${cuotaText}`;
+        waMessage = `Esperamos que se encuentre muy bien. Le escribimos para recordarle amablemente que su próxima cuota está por vencer. (Cuota ${currentIndex} de ${totalInst})`;
         waColor = '#4ade80'; // Green
         waBg = 'rgba(74, 222, 128, 0.15)';
         waBorder = 'rgba(74, 222, 128, 0.3)';
@@ -1288,6 +1290,19 @@ window.deletePayment = async function(clientId, paymentId) {
     showToast('Abono eliminado y saldo recalculado exitosamente.');
 };
 
+function getMissedInstallmentsText(client) {
+    if (!client.installments) return '';
+    const todayStr = getLocalDateString();
+    const missed = client.installments
+        .map((inst, idx) => ({ inst, num: idx + 1 }))
+        .filter(x => x.inst.status !== 'Pagado' && x.inst.date < todayStr)
+        .map(x => x.num);
+    
+    if (missed.length === 0) return '';
+    if (missed.length === 1) return `No pagó su cuota ${missed[0]}`;
+    return `No pagó sus cuotas ${missed.join(', ')}`;
+}
+
 function renderDashboardTable() {
     const container = document.getElementById('table-dashboard-body');
     if (!container) return;
@@ -1299,6 +1314,11 @@ function renderDashboardTable() {
     container.innerHTML = activeClients.map(c => {
         const inst = getCurrentInstallment(c);
         const expected = inst ? getInstallmentTotal(inst, c.amount) : 0;
+        const missedText = getMissedInstallmentsText(c);
+        const idHtml = missedText 
+            ? `<span class="id-text" style="color: var(--danger); font-weight: 500;">${missedText}</span>` 
+            : `<span class="id-text">${c.id}</span>`;
+            
         return `
         <div class="client-card-item">
             <div class="client-card-header">
@@ -1306,7 +1326,7 @@ function renderDashboardTable() {
                     <div class="avatar-sm">${c.initials}</div>
                     <div>
                         <strong>${c.name}</strong>
-                        <span class="id-text">${c.id}</span>
+                        ${idHtml}
                     </div>
                 </div>
                 ${getStatusBadge(c.status)}
@@ -1359,12 +1379,17 @@ function renderSociosTable() {
     tbody.innerHTML = socios.map(c => {
         const inst = getCurrentInstallment(c);
         const expected = inst ? getInstallmentTotal(inst, c.amount) : 0;
+        const missedText = getMissedInstallmentsText(c);
+        const idHtml = missedText 
+            ? `<span class="id-text" style="color: var(--danger); font-weight: 500;">${missedText}</span>` 
+            : `<span class="id-text">${c.id}</span>`;
+            
         return `
         <tr>
             <td>
                 <div class="client-cell">
                     <div class="avatar-sm">${c.initials}</div>
-                    <div><strong>${c.name}</strong><span class="id-text">${c.id}</span></div>
+                    <div><strong>${c.name}</strong>${idHtml}</div>
                 </div>
             </td>
             <td>${formatCurrency(c.amount)}</td>
