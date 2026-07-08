@@ -739,12 +739,26 @@ window.editClient = function(clientId) {
     document.getElementById('modal-new-client').style.display = 'flex';
 };
 
-window.deleteClient = function(clientId) {
+window.deleteClient = async function(clientId) {
     if(!confirm('¿Estás seguro de que deseas eliminar a este cliente?')) return;
+    
+    // Eliminar de Supabase primero
+    if (supabaseClient) {
+        try {
+            await supabaseClient.from('clients').delete().eq('id', clientId);
+            console.log('Client deleted from Supabase:', clientId);
+        } catch (e) {
+            console.error('Error deleting client from Supabase:', e);
+            showToast('Error al eliminar de la base de datos.', 'error');
+            return;
+        }
+    }
+    
     clients = clients.filter(c => c.id !== clientId);
     saveClientsData();
     renderAllTables();
     renderChart();
+    showToast('Cliente eliminado exitosamente.');
 };
 
 window.openPaymentModal = function(clientId) {
@@ -1043,9 +1057,8 @@ window.undoLiquidado = function(clientId) {
             showToast('El cliente ya tiene abonos suficientes para estar liquidado. No se puede restaurar.', 'error');
             return;
         } else {
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const hasMora = pendingInsts.some(i => new Date(i.date) < today);
+            const todayStr = getLocalDateString();
+            const hasMora = pendingInsts.some(i => i.date < todayStr);
             c.status = hasMora ? 'En Mora' : 'Al Día';
         }
     } else {
@@ -1069,6 +1082,7 @@ function renderAllTables() {
     renderDashboardTable();
     renderSociosTable();
     renderHistoryTable();
+    renderIncobrablesTable();
     renderAlerts();
     updateStats();
     if (typeof renderAdminPublicTable === 'function') renderAdminPublicTable();
@@ -1079,6 +1093,7 @@ function getStatusBadge(status) {
     if(status === 'En Mora') return '<span class="status-badge danger">En Mora</span>';
     if(status === 'En Proceso' || status === 'Al Día') return '<span class="status-badge info">Al Día</span>';
     if(status === 'Liquidado') return '<span class="status-badge success">Liquidado</span>';
+    if(status === 'Incobrable') return '<span class="status-badge danger" style="background: rgba(220, 38, 38, 0.2);">Incobrable</span>';
     return `<span class="status-badge info">${status}</span>`;
 }
 
@@ -1154,6 +1169,7 @@ function getActionButtons(c) {
         <button class="icon-btn small" onclick="openPaymentModal('${c.id}')" title="Registrar Pago de Cuota"><i class="ph ph-currency-dollar"></i></button>
         <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
         <button class="icon-btn small" onclick="markAsPaid('${c.id}')" title="Liquidar Total"><i class="ph ph-check-circle"></i></button>
+        <button class="icon-btn small" style="color:var(--danger);" onclick="markAsIncobrable('${c.id}')" title="Marcar Incobrable"><i class="ph ph-warning-octagon"></i></button>
         <button class="icon-btn small" onclick="editClient('${c.id}')" title="Editar"><i class="ph ph-pencil"></i></button>
         <button class="icon-btn small" onclick="deleteClient('${c.id}')" title="Eliminar"><i class="ph ph-trash"></i></button>
     `;
@@ -1269,9 +1285,8 @@ window.deletePayment = async function(clientId, paymentId) {
         if (pendingInsts.length === 0) {
             c.status = 'Liquidado';
         } else {
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const hasMora = pendingInsts.some(i => new Date(i.date) < today);
+            const todayStr = getLocalDateString();
+            const hasMora = pendingInsts.some(i => i.date < todayStr);
             c.status = hasMora ? 'En Mora' : 'Al Día';
         }
     }
@@ -1307,7 +1322,7 @@ function renderDashboardTable() {
     const container = document.getElementById('table-dashboard-body');
     if (!container) return;
     
-    let activeClients = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado')));
+    let activeClients = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Incobrable')));
     const dashCount = document.getElementById('dashboard-active-count');
     if(dashCount) dashCount.innerText = activeClients.length + ' ACTIVOS';
 
@@ -1369,7 +1384,7 @@ function renderSociosTable() {
     const tbody = document.getElementById('table-socios-body');
     if (!tbody) return;
     
-    let socios = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado')));
+    let socios = getSortedList(filterClients(clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Incobrable')));
     
     const searchTerm = (document.getElementById('search-socios')?.value || '').toLowerCase();
     if (searchTerm) {
@@ -1427,6 +1442,89 @@ function renderHistoryTable() {
         </tr>
     `).join('');
 }
+
+function renderIncobrablesTable() {
+    const tbody = document.getElementById('table-incobrables-body');
+    if (!tbody) return;
+    
+    let incobrables = getSortedList(filterClients(clients.filter(c => c.status === 'Incobrable')));
+
+    tbody.innerHTML = incobrables.map(c => `
+        <tr>
+            <td>
+                <div class="client-cell">
+                    <div class="avatar-sm" style="background: rgba(220, 38, 38, 0.2); color: var(--danger);">${c.initials}</div>
+                    <div><strong>${c.name}</strong><span class="id-text">${c.id}</span></div>
+                </div>
+            </td>
+            <td>${formatCurrency(c.amount)}</td>
+            <td style="color: var(--danger); font-weight:bold;">${formatCurrency(c.balance)}</td>
+            <td>${c.endDate || getLocalDateString()}</td>
+            <td style="display: flex; gap: 4px; justify-content: flex-end;">
+                <button class="icon-btn small" onclick="undoIncobrable('${c.id}')" title="Restaurar a Activo"><i class="ph ph-arrow-u-up-left"></i></button>
+                <button class="icon-btn small" onclick="viewCronograma('${c.id}')" title="Ver Cronograma"><i class="ph ph-calendar-dots"></i></button>
+                <button class="icon-btn small" onclick="deleteClient('${c.id}')" title="Eliminar"><i class="ph ph-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.markAsIncobrable = async function(clientId) {
+    if(!confirm('¿Estás seguro de que deseas marcar a este cliente como INCOBRABLE? Será retirado de los activos.')) return;
+    const client = clients.find(c => c.id === clientId);
+    if(client) {
+        client.status = 'Incobrable';
+        client.endDate = getLocalDateString();
+        
+        if (supabaseClient) {
+            try {
+                const { error } = await supabaseClient
+                    .from('clients')
+                    .update({
+                        status: client.status,
+                        end_date: client.endDate
+                    })
+                    .eq('id', clientId);
+                if (error) console.error("Error al marcar incobrable en Supabase:", error);
+            } catch (err) {
+                console.error("Excepción en Supabase:", err);
+            }
+        }
+        
+        saveData();
+        renderAllTables();
+        showToast('Cliente marcado como incobrable.');
+    }
+};
+
+window.undoIncobrable = async function(clientId) {
+    if(!confirm('¿Deseas restaurar a este cliente a la lista de activos?')) return;
+    const client = clients.find(c => c.id === clientId);
+    if(client) {
+        client.status = 'Al Día';
+        delete client.endDate;
+        recalcInstallments(client);
+        
+        if (supabaseClient) {
+            try {
+                const { error } = await supabaseClient
+                    .from('clients')
+                    .update({
+                        status: client.status,
+                        end_date: null
+                    })
+                    .eq('id', clientId);
+                if (error) console.error("Error al restaurar incobrable en Supabase:", error);
+            } catch (err) {
+                console.error("Excepción en Supabase:", err);
+            }
+        }
+        
+        saveData();
+        renderAllTables();
+        showToast('Cliente restaurado a Socios Activos.');
+    }
+};
 
 function renderAlerts() {
     const container = document.getElementById('alerts-container');
@@ -1510,7 +1608,7 @@ function updateStats() {
     const filterStart = document.getElementById('filter-start')?.value;
     const filterEnd = document.getElementById('filter-end')?.value;
 
-    const active = clients.filter(c => c.status !== 'Liquidado');
+    const active = clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Incobrable');
     const sociosCount = document.getElementById('socios-activos-count');
     if(sociosCount) sociosCount.innerText = active.length;
 
@@ -1524,7 +1622,7 @@ function updateStats() {
         if (filterStart && c.startDate < filterStart) includeCapital = false;
         if (filterEnd && c.startDate > filterEnd) includeCapital = false;
         
-        if (includeCapital && c.status !== 'Liquidado') {
+        if (includeCapital && c.status !== 'Liquidado' && c.status !== 'Incobrable') {
             totalInvertido += c.amount;
         }
 
@@ -1534,7 +1632,7 @@ function updateStats() {
             if (filterEnd && inst.date > filterEnd) includeInst = false;
             
             if (includeInst) {
-                if (inst.status !== 'Pagado' && c.status !== 'Liquidado') {
+                if (inst.status !== 'Pagado' && c.status !== 'Liquidado' && c.status !== 'Incobrable') {
                     totalARecuperar += getInstallmentTotal(inst, c.amount);
                     interesesTotal += (inst.expectedInterest || 0);
                     if (inst.penalty > 0) {
@@ -1562,7 +1660,7 @@ function renderResumenTable(filterStart, filterEnd) {
     const tbody = document.getElementById('table-resumen-body');
     if (!tbody) return;
     
-    const activeClients = clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Pagado');
+    const activeClients = clients.filter(c => c.status !== 'Liquidado' && c.status !== 'Pagado' && c.status !== 'Incobrable');
     
     let filteredClients = activeClients;
     const searchTerm = (document.getElementById('search-resumen')?.value || '').toLowerCase();

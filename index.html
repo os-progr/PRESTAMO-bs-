@@ -143,6 +143,9 @@
                 <a href="#" class="nav-item" id="nav-resumen">
                     <i class="ph ph-chart-pie-slice"></i> Resumen Operativo
                 </a>
+                <a href="#" class="nav-item" id="nav-incobrables">
+                    <i class="ph ph-warning-octagon"></i> Cartera Incobrable
+                </a>
                 <a href="#" class="nav-item" id="nav-admin-public" style="border-top: 1px solid rgba(255,255,255,0.05); margin-top: 8px; padding-top: 16px;">
                     <i class="ph ph-globe"></i> Admin Público
                 </a>
@@ -446,6 +449,42 @@
                 </div>
             </div>
 
+            <!-- Incobrables View -->
+            <div id="incobrables-view" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h2 style="color: var(--danger);">Cartera Incobrable</h2>
+                        <p class="subtitle">"Clientes apartados por falta de pago (Morosos graves)."</p>
+                    </div>
+                </div>
+
+                <div class="glass-card table-card">
+                    <div class="card-header">
+                        <div class="table-title">
+                            <h3>Cuentas Suspendidas</h3>
+                            <span class="badge danger">INCOBRABLE</span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortClients('name')" style="cursor: pointer;">Cliente <i class="ph ph-caret-up-down"></i></th>
+                                    <th onclick="sortClients('amount')" style="cursor: pointer;">Capital Prestado <i class="ph ph-caret-up-down"></i></th>
+                                    <th>Deuda Pendiente</th>
+                                    <th>Fecha Suspensión</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-incobrables-body">
+                                <!-- JS Will Render Here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Admin Public View -->
             <div id="admin-public-view" class="page-content" style="display: none;">
                 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
@@ -621,6 +660,7 @@
         const navSocios = document.getElementById('nav-socios');
         const navConfig = document.getElementById('nav-config');
         const navResumen = document.getElementById('nav-resumen');
+        const navIncobrables = document.getElementById('nav-incobrables');
         const navAdminPublic = document.getElementById('nav-admin-public');
 
         const viewDashboard = document.getElementById('dashboard-view');
@@ -628,10 +668,11 @@
         const viewSocios = document.getElementById('socios-view');
         const viewConfig = document.getElementById('config-view');
         const viewResumen = document.getElementById('resumen-view');
+        const viewIncobrables = document.getElementById('incobrables-view');
         const viewAdminPublic = document.getElementById('admin-public-view');
 
-        const allNavs = [navDashboard, navHistory, navSocios, navConfig, navResumen, navAdminPublic];
-        const allViews = [viewDashboard, viewHistory, viewSocios, viewConfig, viewResumen, viewAdminPublic];
+        const allNavs = [navDashboard, navHistory, navSocios, navConfig, navResumen, navIncobrables, navAdminPublic];
+        const allViews = [viewDashboard, viewHistory, viewSocios, viewConfig, viewResumen, viewIncobrables, viewAdminPublic];
 
         function switchView(activeNav, activeView) {
             allNavs.forEach(nav => { if(nav) nav.classList.remove('active') });
@@ -646,6 +687,7 @@
         if(navSocios) navSocios.addEventListener('click', (e) => { e.preventDefault(); switchView(navSocios, viewSocios); });
         if(navConfig) navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView(navConfig, viewConfig); });
         if(navResumen) navResumen.addEventListener('click', (e) => { e.preventDefault(); switchView(navResumen, viewResumen); });
+        if(navIncobrables) navIncobrables.addEventListener('click', (e) => { e.preventDefault(); switchView(navIncobrables, viewIncobrables); });
         if(navAdminPublic) navAdminPublic.addEventListener('click', (e) => { e.preventDefault(); switchView(navAdminPublic, viewAdminPublic); });
 
         // Modal Logic
@@ -823,6 +865,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>
