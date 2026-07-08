@@ -380,7 +380,7 @@ function checkMoras() {
     const todayTime = new Date(today).getTime();
     
     clients.forEach(c => {
-        if (c.status !== 'Liquidado') {
+        if (c.status !== 'Liquidado' && c.status !== 'Incobrable') {
             const currentInst = getCurrentInstallment(c);
             if (!currentInst) {
                 c.status = 'Liquidado';
