@@ -1491,7 +1491,7 @@ window.markAsIncobrable = async function(clientId) {
             }
         }
         
-        saveData();
+        saveClientsData();
         renderAllTables();
         showToast('Cliente marcado como incobrable.');
     }
@@ -1520,7 +1520,7 @@ window.undoIncobrable = async function(clientId) {
             }
         }
         
-        saveData();
+        saveClientsData();
         renderAllTables();
         showToast('Cliente restaurado a Socios Activos.');
     }
