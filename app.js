@@ -157,7 +157,8 @@ if (!config.whatsappName) config.whatsappName = 'Juan David Puclla Quispe';
 
 function mapSupabaseClientToApp(row) {
     const duration = row.term || 1;
-    const date = row.startDate || row.date || getLocalDateString();
+    let date = row.startDate || row.date || getLocalDateString();
+    if (date && date.includes('T')) date = date.split('T')[0];
     
     // Función auxiliar para iniciales
     function getInits(n) {
@@ -321,6 +322,7 @@ async function loadClientsFromSupabase() {
         }
     } catch (e) {
         console.error('Error cargando de Supabase:', e);
+        showToast('Error cargando datos: ' + e.message, 'error');
     }
 }
 
